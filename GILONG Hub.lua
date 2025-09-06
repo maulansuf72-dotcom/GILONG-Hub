@@ -21,6 +21,7 @@ local player = Players.LocalPlayer
 -- Key System
 local correctKey = "AyamGoreng!"
 local keyLink = "https://link-hub.net/1392772/AfVHcFNYkLMx"
+local enteredKey = ""
 
 -- Copy function
 local function copyToClipboard(text)
@@ -554,19 +555,28 @@ local function createKeyGUI()
     
     local KeyTab = KeyWindow:AddTab({ Title = "Key System", Icon = "🔑" })
     
-    -- Key Input
+    -- Key Input with TextBox
     KeyTab:AddInput("KeyInput", {
         Title = "Enter Key",
-        Description = "Input your key here",
+        Description = "Type: AyamGoreng!",
         Default = "",
-        Placeholder = "Enter key...",
+        Placeholder = "Enter key here...",
         Numeric = false,
-        Finished = false,
+        Finished = true,
         Callback = function(Value)
-            if Value == correctKey then
+            enteredKey = Value
+        end
+    })
+    
+    -- Submit Key Button
+    KeyTab:AddButton({
+        Title = "Submit Key",
+        Description = "Click to check your key",
+        Callback = function()
+            if enteredKey == correctKey then
                 Fluent:Notify({
                     Title = "GILONG Hub",
-                    Content = "Key correct! Loading hub...",
+                    Content = "✅ Key correct! Loading hub...",
                     Duration = 3
                 })
                 wait(1)
@@ -575,7 +585,7 @@ local function createKeyGUI()
             else
                 Fluent:Notify({
                     Title = "GILONG Hub",
-                    Content = "Wrong key! Please try again.",
+                    Content = "❌ Wrong key! Try again.",
                     Duration = 3
                 })
             end
@@ -590,7 +600,7 @@ local function createKeyGUI()
             if copyToClipboard(keyLink) then
                 Fluent:Notify({
                     Title = "GILONG Hub",
-                    Content = "Key link copied to clipboard!",
+                    Content = "📋 Key link copied to clipboard!",
                     Duration = 3
                 })
             else
@@ -606,7 +616,23 @@ local function createKeyGUI()
     -- Instructions
     KeyTab:AddParagraph({
         Title = "Instructions",
-        Content = "1. Click 'Get Key' to copy the link\n2. Complete the key system\n3. Enter your key above\n4. Enjoy GILONG Hub for Blox Fruits!"
+        Content = "1. Click 'Get Key' to copy the link\n2. Complete the key system\n3. Enter key: AyamGoreng!\n4. Click 'Submit Key'\n5. Enjoy GILONG Hub!"
+    })
+    
+    -- Direct access for testing
+    KeyTab:AddButton({
+        Title = "Skip Key (Testing)",
+        Description = "Direct access for testing",
+        Callback = function()
+            Fluent:Notify({
+                Title = "GILONG Hub",
+                Content = "🚀 Loading hub directly...",
+                Duration = 2
+            })
+            wait(1)
+            KeyWindow:Destroy()
+            loadMainHub()
+        end
     })
 end
 
