@@ -1,20 +1,13 @@
 -- GILONG Hub Script untuk 99 Night in the Forest
 -- Menggunakan Orion Library untuk GUI
 -- Key System: AyamGoreng!
--- Version: Final Release
+-- Version: ULTRA STABLE
 
--- Load Orion Library with error handling
-local OrionLib
-local success, result = pcall(function()
-    return loadstring(game:HttpGet('https://raw.githubusercontent.com/shlexware/Orion/main/source'))()
-end)
+-- Wait for game to load
+repeat wait() until game:IsLoaded()
 
-if success then
-    OrionLib = result
-else
-    -- Fallback to alternative Orion source
-    OrionLib = loadstring(game:HttpGet('https://raw.githubusercontent.com/ionlyusegithubformcmods/1-Line-Scripts/main/Orion%20Lib'))()
-end
+-- Simple Orion Library loader
+local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/shlexware/Orion/main/source')))()
 
 -- Key System Variables
 local keyCorrect = false
@@ -47,14 +40,6 @@ local function copyToClipboard(text)
         return true
     end
     return false
-end
-
--- Function untuk safe wait
-local function safeWait(duration)
-    local startTime = tick()
-    while tick() - startTime < duration do
-        RunService.Heartbeat:Wait()
-    end
 end
 
 -- Function untuk load main hub
@@ -220,59 +205,39 @@ local function loadMainHub()
                         end
                         
                         -- Find trees in range
-                        local function searchInFolder(folder)
-                            for _, obj in pairs(folder:GetChildren()) do
-                                local isValidTree = false
-                                local treeName = obj.Name:lower()
-                                
-                                -- Check tree type with more patterns
-                                if chopTreeType == "All" then
-                                    isValidTree = treeName:find("tree") or treeName:find("wood") or treeName:find("log") or 
-                                                 treeName:find("oak") or treeName:find("pine") or treeName:find("birch")
-                                elseif chopTreeType == "Small" then
-                                    isValidTree = (treeName:find("small") or treeName:find("little")) and 
-                                                 (treeName:find("tree") or treeName:find("wood"))
-                                elseif chopTreeType == "Big" then
-                                    isValidTree = (treeName:find("big") or treeName:find("large") or treeName:find("huge")) and 
-                                                 (treeName:find("tree") or treeName:find("wood"))
-                                elseif chopTreeType == "Snowy" then
-                                    isValidTree = (treeName:find("snowy") or treeName:find("snow") or treeName:find("winter")) and 
-                                                 (treeName:find("tree") or treeName:find("wood"))
-                                end
-                                
-                                if isValidTree then
-                                    local treePart = obj:FindFirstChild("Part") or obj:FindFirstChild("Trunk") or 
-                                                    obj:FindFirstChild("Base") or obj.PrimaryPart
-                                    if treePart then
-                                        local distance = (rootPart.Position - treePart.Position).Magnitude
-                                        if distance <= chopTreeRange then
-                                            -- Chop tree using different methods
-                                            local chopRemote = ReplicatedStorage:FindFirstChild("ChopTree") or 
-                                                             ReplicatedStorage:FindFirstChild("Chop") or
-                                                             ReplicatedStorage:FindFirstChild("Cut") or
-                                                             ReplicatedStorage:FindFirstChild("HarvestTree")
-                                            if chopRemote and chopRemote:IsA("RemoteEvent") then
-                                                chopRemote:FireServer(obj)
-                                            elseif chopRemote and chopRemote:IsA("RemoteFunction") then
-                                                chopRemote:InvokeServer(obj)
-                                            end
-                                            wait(0.2)
-                                            return true
+                        for _, obj in pairs(Workspace:GetChildren()) do
+                            local isValidTree = false
+                            local treeName = obj.Name:lower()
+                            
+                            -- Check tree type
+                            if chopTreeType == "All" then
+                                isValidTree = treeName:find("tree") or treeName:find("wood") or treeName:find("log")
+                            elseif chopTreeType == "Small" then
+                                isValidTree = treeName:find("small") and (treeName:find("tree") or treeName:find("wood"))
+                            elseif chopTreeType == "Big" then
+                                isValidTree = treeName:find("big") and (treeName:find("tree") or treeName:find("wood"))
+                            elseif chopTreeType == "Snowy" then
+                                isValidTree = treeName:find("snowy") and (treeName:find("tree") or treeName:find("wood"))
+                            end
+                            
+                            if isValidTree and obj:FindFirstChild("Part") then
+                                local treePart = obj:FindFirstChild("Part") or obj.PrimaryPart
+                                if treePart then
+                                    local distance = (rootPart.Position - treePart.Position).Magnitude
+                                    if distance <= chopTreeRange then
+                                        -- Chop tree
+                                        local chopRemote = ReplicatedStorage:FindFirstChild("ChopTree") or 
+                                                         ReplicatedStorage:FindFirstChild("Chop") or
+                                                         ReplicatedStorage:FindFirstChild("Cut")
+                                        if chopRemote then
+                                            chopRemote:FireServer(obj)
                                         end
-                                    end
-                                end
-                                
-                                -- Search in subfolders
-                                if obj:IsA("Folder") or obj:IsA("Model") then
-                                    if searchInFolder(obj) then
-                                        return true
+                                        wait(0.2)
+                                        break
                                     end
                                 end
                             end
-                            return false
                         end
-                        
-                        searchInFolder(Workspace)
                     end)
                 end)
             else
@@ -350,31 +315,17 @@ local function loadMainHub()
                         end
                         
                         -- Bring selected items
-                        local function searchForItems(folder)
-                            for _, obj in pairs(folder:GetChildren()) do
-                                for _, itemName in pairs(selectedItems) do
-                                    if obj.Name:lower():find(itemName:lower()) then
-                                        local itemPart = obj:FindFirstChild("Part") or obj:FindFirstChild("Handle") or 
-                                                        obj:FindFirstChild("Base") or obj.PrimaryPart
-                                        if itemPart and itemPart:IsA("BasePart") then
-                                            -- Safe teleport with collision check
-                                            local targetPos = rootPart.CFrame * CFrame.new(math.random(-3,3), 2, math.random(-3,3))
-                                            itemPart.CFrame = targetPos
-                                            itemPart.Velocity = Vector3.new(0, 0, 0)
-                                            itemPart.AngularVelocity = Vector3.new(0, 0, 0)
-                                            wait(0.05)
-                                        end
+                        for _, itemName in pairs(selectedItems) do
+                            for _, obj in pairs(Workspace:GetChildren()) do
+                                if obj.Name:lower():find(itemName:lower()) and obj:FindFirstChild("Part") then
+                                    local itemPart = obj:FindFirstChild("Part") or obj.PrimaryPart
+                                    if itemPart then
+                                        itemPart.CFrame = rootPart.CFrame * CFrame.new(0, 2, 0)
+                                        wait(0.05)
                                     end
-                                end
-                                
-                                -- Search in subfolders
-                                if obj:IsA("Folder") or obj:IsA("Model") then
-                                    searchForItems(obj)
                                 end
                             end
                         end
-                        
-                        searchForItems(Workspace)
                     end)
                 end)
             else
@@ -536,39 +487,6 @@ local function loadMainHub()
         end    
     })
 
-    -- Infinite Stamina Toggle
-    PlayerTab:AddToggle({
-        Name = "Infinite Stamina",
-        Default = false,
-        Callback = function(Value)
-            infiniteStamina = Value
-            if infiniteStamina then
-                connections.infiniteStamina = RunService.Heartbeat:Connect(function()
-                    if not infiniteStamina then return end
-                    
-                    pcall(function()
-                        -- Find stamina GUI or value
-                        local playerGui = player:FindFirstChild("PlayerGui")
-                        if playerGui then
-                            local staminaGui = playerGui:FindFirstChild("Stamina") or playerGui:FindFirstChild("Energy")
-                            if staminaGui then
-                                local staminaValue = staminaGui:FindFirstChild("Value") or staminaGui:FindFirstChild("Current")
-                                if staminaValue then
-                                    staminaValue.Value = 100
-                                end
-                            end
-                        end
-                    end)
-                end)
-            else
-                if connections.infiniteStamina then
-                    connections.infiniteStamina:Disconnect()
-                    connections.infiniteStamina = nil
-                end
-            end
-        end    
-    })
-
     -- Tab Visual
     local VisualTab = Window:MakeTab({
         Name = "Visual",
@@ -708,7 +626,7 @@ KeyTab:AddTextbox({
                 Image = "rbxassetid://79608248053265",
                 Time = 3
             })
-            safeWait(1)
+            wait(1)
             KeyWindow:Destroy()
             loadMainHub()
         else
