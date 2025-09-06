@@ -1,6 +1,7 @@
 -- GILONG Hub Script untuk Slap Battles
 -- Menggunakan Orion Library untuk GUI
 -- Key System: AyamGoreng!
+-- Version: Final Release
 
 local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/shlexware/Orion/main/source')))()
 
@@ -9,38 +10,75 @@ local keyCorrect = false
 local correctKey = "AyamGoreng!"
 local keyLink = "https://link-hub.net/1392772/AfVHcFNYkLMx"
 
+-- Global Variables
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+local TeleportService = game:GetService("TeleportService")
+local HttpService = game:GetService("HttpService")
+local VirtualUser = game:GetService("VirtualUser")
+
+local player = Players.LocalPlayer
+
 -- Function untuk copy link ke clipboard
 local function copyToClipboard(text)
     if setclipboard then
         setclipboard(text)
         return true
+    elseif syn and syn.write_clipboard then
+        syn.write_clipboard(text)
+        return true
+    elseif Clipboard and Clipboard.set then
+        Clipboard.set(text)
+        return true
     end
     return false
 end
 
+-- Function untuk safe wait
+local function safeWait(duration)
+    local startTime = tick()
+    while tick() - startTime < duration do
+        RunService.Heartbeat:Wait()
+    end
+end
+
 -- Function untuk load main hub
 local function loadMainHub()
-    -- Variables untuk player dan services
-    local Players = game:GetService("Players")
-    local RunService = game:GetService("RunService")
-    local TweenService = game:GetService("TweenService")
-    local UserInputService = game:GetService("UserInputService")
-    local ReplicatedStorage = game:GetService("ReplicatedStorage")
-    local Workspace = game:GetService("Workspace")
-
-    local player = Players.LocalPlayer
+    -- Wait for character to load properly
     local character = player.Character or player.CharacterAdded:Wait()
-    local humanoid = character:WaitForChild("Humanoid")
-    local rootPart = character:WaitForChild("HumanoidRootPart")
+    local humanoid = character:WaitForChild("Humanoid", 10)
+    local rootPart = character:WaitForChild("HumanoidRootPart", 10)
+    
+    if not humanoid or not rootPart then
+        OrionLib:MakeNotification({
+            Name = "GILONG Hub",
+            Content = "Failed to load character! Please rejoin.",
+            Image = "rbxassetid://79608248053265",
+            Time = 5
+        })
+        return
+    end
 
-    -- Variables untuk auto features
+    -- Variables untuk auto features dengan proper initialization
     local autoSlap = false
     local autoFarm = false
     local antiRagdoll = false
-    local walkSpeed = 20
-    local jumpPower = 50
+    local walkSpeed = humanoid.WalkSpeed or 20
+    local jumpPower = humanoid.JumpPower or 50
     local noclip = false
     local autoRespawn = false
+    local infiniteJump = false
+    local godMode = false
+    local antiAFK = false
+    local chatSpam = false
+    local spamMessage = "GILONG Hub"
+
+    -- Connection storage for cleanup
+    local connections = {}
 
     -- Membuat Window utama
     local Window = OrionLib:MakeWindow({
@@ -67,10 +105,18 @@ local function loadMainHub()
         Callback = function(Value)
             autoSlap = Value
             if autoSlap then
-                spawn(function()
-                    while autoSlap do
-                        wait(0.1)
-                        -- Logic auto slap
+                connections.autoSlap = RunService.Heartbeat:Connect(function()
+                    if not autoSlap then return end
+                    
+                    pcall(function()
+                        if not character or not character.Parent or not rootPart or not rootPart.Parent then
+                            character = player.Character
+                            if character then
+                                rootPart = character:FindFirstChild("HumanoidRootPart")
+                            end
+                            return
+                        end
+                        
                         for _, target in pairs(Players:GetPlayers()) do
                             if target ~= player and target.Character then
                                 local targetRoot = target.Character:FindFirstChild("HumanoidRootPart")
@@ -78,19 +124,24 @@ local function loadMainHub()
                                 
                                 if targetRoot and targetHumanoid and targetHumanoid.Health > 0 then
                                     local distance = (rootPart.Position - targetRoot.Position).Magnitude
-                                    if distance <= 20 then -- Jarak slap
-                                        -- Trigger slap
+                                    if distance <= 25 then
                                         local slapRemote = ReplicatedStorage:FindFirstChild("b")
                                         if slapRemote then
                                             slapRemote:FireServer(target.Character:FindFirstChild("Head"))
                                         end
-                                        wait(0.2)
+                                        safeWait(0.15)
+                                        break
                                     end
                                 end
                             end
                         end
-                    end
+                    end)
                 end)
+            else
+                if connections.autoSlap then
+                    connections.autoSlap:Disconnect()
+                    connections.autoSlap = nil
+                end
             end
         end    
     })
@@ -102,17 +153,27 @@ local function loadMainHub()
         Callback = function(Value)
             autoFarm = Value
             if autoFarm then
-                spawn(function()
-                    while autoFarm do
-                        wait(0.1)
-                        -- Cari target terdekat
+                connections.autoFarm = RunService.Heartbeat:Connect(function()
+                    if not autoFarm then return end
+                    
+                    pcall(function()
+                        if not character or not character.Parent or not rootPart or not rootPart.Parent then
+                            character = player.Character
+                            if character then
+                                rootPart = character:FindFirstChild("HumanoidRootPart")
+                            end
+                            return
+                        end
+                        
                         local nearestTarget = nil
                         local nearestDistance = math.huge
                         
                         for _, target in pairs(Players:GetPlayers()) do
                             if target ~= player and target.Character then
                                 local targetRoot = target.Character:FindFirstChild("HumanoidRootPart")
-                                if targetRoot then
+                                local targetHumanoid = target.Character:FindFirstChild("Humanoid")
+                                
+                                if targetRoot and targetHumanoid and targetHumanoid.Health > 0 then
                                     local distance = (rootPart.Position - targetRoot.Position).Magnitude
                                     if distance < nearestDistance then
                                         nearestDistance = distance
@@ -122,22 +183,26 @@ local function loadMainHub()
                             end
                         end
                         
-                        -- Teleport dan slap target terdekat
                         if nearestTarget and nearestTarget.Character then
                             local targetRoot = nearestTarget.Character:FindFirstChild("HumanoidRootPart")
-                            if targetRoot and rootPart then
-                                rootPart.CFrame = targetRoot.CFrame * CFrame.new(0, 0, -5)
-                                wait(0.1)
+                            if targetRoot then
+                                rootPart.CFrame = targetRoot.CFrame * CFrame.new(0, 0, -4)
+                                safeWait(0.1)
                                 
-                                -- Slap target
                                 local slapRemote = ReplicatedStorage:FindFirstChild("b")
                                 if slapRemote then
                                     slapRemote:FireServer(nearestTarget.Character:FindFirstChild("Head"))
                                 end
+                                safeWait(0.2)
                             end
                         end
-                    end
+                    end)
                 end)
+            else
+                if connections.autoFarm then
+                    connections.autoFarm:Disconnect()
+                    connections.autoFarm = nil
+                end
             end
         end    
     })
@@ -149,20 +214,26 @@ local function loadMainHub()
         Callback = function(Value)
             antiRagdoll = Value
             if antiRagdoll then
-                spawn(function()
-                    while antiRagdoll do
-                        wait()
+                connections.antiRagdoll = RunService.Heartbeat:Connect(function()
+                    if not antiRagdoll then return end
+                    
+                    pcall(function()
                         if character and character:FindFirstChild("Humanoid") then
                             character.Humanoid.PlatformStand = false
                             for _, part in pairs(character:GetChildren()) do
-                                if part:IsA("BasePart") then
+                                if part:IsA("BasePart") and part ~= rootPart then
                                     part.Velocity = Vector3.new(0, 0, 0)
                                     part.AngularVelocity = Vector3.new(0, 0, 0)
                                 end
                             end
                         end
-                    end
+                    end)
                 end)
+            else
+                if connections.antiRagdoll then
+                    connections.antiRagdoll:Disconnect()
+                    connections.antiRagdoll = nil
+                end
             end
         end    
     })
@@ -186,17 +257,19 @@ local function loadMainHub()
     -- Walk Speed Slider
     PlayerTab:AddSlider({
         Name = "Walk Speed",
-        Min = 20,
+        Min = 16,
         Max = 500,
-        Default = 20,
+        Default = walkSpeed,
         Color = Color3.fromRGB(255,255,255),
-        Increment = 5,
+        Increment = 1,
         ValueName = "Speed",
         Callback = function(Value)
             walkSpeed = Value
-            if humanoid then
-                humanoid.WalkSpeed = walkSpeed
-            end
+            pcall(function()
+                if humanoid then
+                    humanoid.WalkSpeed = walkSpeed
+                end
+            end)
         end    
     })
 
@@ -205,15 +278,17 @@ local function loadMainHub()
         Name = "Jump Power",
         Min = 50,
         Max = 500,
-        Default = 50,
+        Default = jumpPower,
         Color = Color3.fromRGB(255,255,255),
-        Increment = 5,
+        Increment = 1,
         ValueName = "Power",
         Callback = function(Value)
             jumpPower = Value
-            if humanoid then
-                humanoid.JumpPower = jumpPower
-            end
+            pcall(function()
+                if humanoid then
+                    humanoid.JumpPower = jumpPower
+                end
+            end)
         end    
     })
 
@@ -224,28 +299,39 @@ local function loadMainHub()
         Callback = function(Value)
             noclip = Value
             if noclip then
-                spawn(function()
-                    while noclip do
-                        wait()
+                connections.noclip = RunService.Heartbeat:Connect(function()
+                    if not noclip then return end
+                    
+                    pcall(function()
+                        if character then
+                            for _, part in pairs(character:GetChildren()) do
+                                if part:IsA("BasePart") then
+                                    part.CanCollide = false
+                                end
+                            end
+                        end
+                    end)
+                end)
+            else
+                if connections.noclip then
+                    connections.noclip:Disconnect()
+                    connections.noclip = nil
+                end
+                
+                pcall(function()
+                    if character then
                         for _, part in pairs(character:GetChildren()) do
-                            if part:IsA("BasePart") then
-                                part.CanCollide = false
+                            if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                                part.CanCollide = true
                             end
                         end
                     end
                 end)
-            else
-                for _, part in pairs(character:GetChildren()) do
-                    if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-                        part.CanCollide = true
-                    end
-                end
             end
         end    
     })
 
     -- Infinite Jump
-    local infiniteJump = false
     PlayerTab:AddToggle({
         Name = "Infinite Jump",
         Default = false,
@@ -255,26 +341,37 @@ local function loadMainHub()
     })
 
     -- Infinite Jump Logic
-    UserInputService.JumpRequest:Connect(function()
-        if infiniteJump and humanoid then
-            humanoid:ChangeState("Jumping")
+    connections.infiniteJump = UserInputService.JumpRequest:Connect(function()
+        if infiniteJump then
+            pcall(function()
+                if humanoid then
+                    humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+                end
+            end)
         end
     end)
 
-    -- God Mode (Anti Death)
+    -- God Mode
     PlayerTab:AddToggle({
         Name = "God Mode",
         Default = false,
         Callback = function(Value)
-            if Value then
-                spawn(function()
-                    while Value do
-                        wait()
-                        if humanoid then
+            godMode = Value
+            if godMode then
+                connections.godMode = RunService.Heartbeat:Connect(function()
+                    if not godMode then return end
+                    
+                    pcall(function()
+                        if humanoid and humanoid.Health < humanoid.MaxHealth then
                             humanoid.Health = humanoid.MaxHealth
                         end
-                    end
+                    end)
                 end)
+            else
+                if connections.godMode then
+                    connections.godMode:Disconnect()
+                    connections.godMode = nil
+                end
             end
         end    
     })
@@ -286,73 +383,80 @@ local function loadMainHub()
         PremiumOnly = false
     })
 
-    -- Teleport to Arena
+    -- Safe teleport function
+    local function safeTeleport(position)
+        pcall(function()
+            if rootPart then
+                rootPart.CFrame = CFrame.new(position)
+            end
+        end)
+    end
+
+    -- Teleport Buttons
     TeleportTab:AddButton({
         Name = "Teleport to Arena",
         Callback = function()
-            if rootPart then
-                rootPart.CFrame = CFrame.new(0, 10, 0) -- Arena utama
-            end
+            safeTeleport(Vector3.new(0, 10, 0))
         end    
     })
 
-    -- Teleport to Safe Zone
     TeleportTab:AddButton({
         Name = "Teleport to Safe Zone",
         Callback = function()
-            if rootPart then
-                rootPart.CFrame = CFrame.new(-800, 328, 10) -- Safe zone coordinates
-            end
+            safeTeleport(Vector3.new(-800, 328, 10))
         end    
     })
 
-    -- Teleport to Moai Island
     TeleportTab:AddButton({
         Name = "Teleport to Moai Island",
         Callback = function()
-            if rootPart then
-                rootPart.CFrame = CFrame.new(215, -15.5, 0.5) -- Moai island
-            end
+            safeTeleport(Vector3.new(215, -15.5, 0.5))
         end    
     })
 
-    -- Teleport to Slapple Island
     TeleportTab:AddButton({
         Name = "Teleport to Slapple Island",
         Callback = function()
-            if rootPart then
-                rootPart.CFrame = CFrame.new(-2500, -7.5, -1500) -- Slapple island
-            end
+            safeTeleport(Vector3.new(-2500, -7.5, -1500))
         end    
     })
 
-    -- Teleport to Plate
     TeleportTab:AddButton({
-        Name = "Teleport to Plate",
+        Name = "Teleport to Plate (Rob Badge)",
         Callback = function()
-            if rootPart then
-                rootPart.CFrame = CFrame.new(25.5, 26000, 25.5) -- Plate for Rob badge
-            end
+            safeTeleport(Vector3.new(25.5, 26000, 25.5))
         end    
     })
 
-    -- Teleport to Players
-    local playerDropdown = {}
-    for _, plr in pairs(Players:GetPlayers()) do
-        if plr ~= player then
-            table.insert(playerDropdown, plr.Name)
+    TeleportTab:AddButton({
+        Name = "Teleport to Cannon Island",
+        Callback = function()
+            safeTeleport(Vector3.new(250, 50, 250))
+        end    
+    })
+
+    -- Player Teleport Dropdown
+    local function updatePlayerList()
+        local playerList = {}
+        for _, plr in pairs(Players:GetPlayers()) do
+            if plr ~= player and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+                table.insert(playerList, plr.Name)
+            end
         end
+        return playerList
     end
 
     TeleportTab:AddDropdown({
         Name = "Teleport to Player",
         Default = "Select Player",
-        Options = playerDropdown,
+        Options = updatePlayerList(),
         Callback = function(Value)
-            local targetPlayer = Players:FindFirstChild(Value)
-            if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                rootPart.CFrame = targetPlayer.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, -5)
-            end
+            pcall(function()
+                local targetPlayer = Players:FindFirstChild(Value)
+                if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                    rootPart.CFrame = targetPlayer.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, -5)
+                end
+            end)
         end    
     })
 
@@ -363,18 +467,28 @@ local function loadMainHub()
         PremiumOnly = false
     })
 
-    -- Equip Gloves
-    local glovesList = {"Default", "Replica", "Phase", "Space", "Detonator", "Woah", "Ice", "Fire", "Spiky", "Ghostwalker", "Diamond", "ZZZZZZZ", "Brick", "Snow", "Pull", "Flash", "Spring", "Swapper", "Bull", "Dice", "Ghost", "Thanos", "Stun", "Confusion", "Glitch", "Snowball", "fish", "🗿", "Obby", "Voodoo", "Leash", "Flamarang", "Extend", "Rock", "Gravity", "Lure", "Jebaited", "Tycoon", "Charge", "Baller", "Tableflip", "Booster", "Shield", "Track", "Goofy"}
+    -- Comprehensive glove list
+    local glovesList = {
+        "Default", "Replica", "Phase", "Space", "Detonator", "Woah", "Ice", "Fire", 
+        "Spiky", "Ghostwalker", "Diamond", "ZZZZZZZ", "Brick", "Snow", "Pull", "Flash", 
+        "Spring", "Swapper", "Bull", "Dice", "Ghost", "Thanos", "Stun", "Confusion", 
+        "Glitch", "Snowball", "fish", "🗿", "Obby", "Voodoo", "Leash", "Flamarang", 
+        "Extend", "Rock", "Gravity", "Lure", "Jebaited", "Tycoon", "Charge", "Baller", 
+        "Tableflip", "Booster", "Shield", "Track", "Goofy", "Confusion", "Elude", 
+        "Pusher", "Hive", "Disarm", "Plague", "Psycho", "Kraken", "Conveyor", "Magnet"
+    }
 
     GlovesTab:AddDropdown({
         Name = "Equip Glove",
         Default = "Default",
         Options = glovesList,
         Callback = function(Value)
-            local equipRemote = ReplicatedStorage:FindFirstChild("Rockremote")
-            if equipRemote then
-                equipRemote:FireServer(Value)
-            end
+            pcall(function()
+                local equipRemote = ReplicatedStorage:FindFirstChild("Rockremote")
+                if equipRemote then
+                    equipRemote:FireServer(Value)
+                end
+            end)
         end    
     })
 
@@ -385,52 +499,59 @@ local function loadMainHub()
         PremiumOnly = false
     })
 
-    -- Remove Fog
+    -- Visual Enhancements
     MiscTab:AddButton({
         Name = "Remove Fog",
         Callback = function()
-            game.Lighting.FogEnd = 100000
-            game.Lighting.FogStart = 0
+            pcall(function()
+                game.Lighting.FogEnd = 100000
+                game.Lighting.FogStart = 0
+            end)
         end    
     })
 
-    -- Fullbright
     MiscTab:AddButton({
         Name = "Fullbright",
         Callback = function()
-            game.Lighting.Brightness = 2
-            game.Lighting.ClockTime = 14
-            game.Lighting.FogEnd = 100000
-            game.Lighting.GlobalShadows = false
-            game.Lighting.OutdoorAmbient = Color3.fromRGB(128, 128, 128)
+            pcall(function()
+                game.Lighting.Brightness = 2
+                game.Lighting.ClockTime = 14
+                game.Lighting.FogEnd = 100000
+                game.Lighting.GlobalShadows = false
+                game.Lighting.OutdoorAmbient = Color3.fromRGB(128, 128, 128)
+            end)
         end    
     })
 
     -- Anti AFK
-    local antiAFK = false
     MiscTab:AddToggle({
         Name = "Anti AFK",
         Default = false,
         Callback = function(Value)
             antiAFK = Value
             if antiAFK then
-                spawn(function()
+                connections.antiAFK = task.spawn(function()
                     while antiAFK do
-                        wait(300) -- 5 menit
-                        game:GetService("VirtualUser"):CaptureController()
-                        game:GetService("VirtualUser"):ClickButton2(Vector2.new())
+                        safeWait(300) -- 5 minutes
+                        pcall(function()
+                            VirtualUser:CaptureController()
+                            VirtualUser:ClickButton2(Vector2.new())
+                        end)
                     end
                 end)
+            else
+                if connections.antiAFK then
+                    task.cancel(connections.antiAFK)
+                    connections.antiAFK = nil
+                end
             end
         end    
     })
 
     -- Chat Spam
-    local chatSpam = false
-    local spamMessage = "GG"
     MiscTab:AddTextbox({
         Name = "Spam Message",
-        Default = "GG",
+        Default = "GILONG Hub",
         TextDisappear = false,
         Callback = function(Value)
             spamMessage = Value
@@ -443,97 +564,120 @@ local function loadMainHub()
         Callback = function(Value)
             chatSpam = Value
             if chatSpam then
-                spawn(function()
+                connections.chatSpam = task.spawn(function()
                     while chatSpam do
-                        wait(1)
-                        game:GetService("ReplicatedStorage").DefaultChatSystemChatEvents.SayMessageRequest:FireServer(spamMessage, "All")
+                        safeWait(2)
+                        pcall(function()
+                            ReplicatedStorage.DefaultChatSystemChatEvents.SayMessageRequest:FireServer(spamMessage, "All")
+                        end)
                     end
                 end)
+            else
+                if connections.chatSpam then
+                    task.cancel(connections.chatSpam)
+                    connections.chatSpam = nil
+                end
             end
         end    
     })
 
-    -- Rejoin Server
+    -- Server Management
     MiscTab:AddButton({
         Name = "Rejoin Server",
         Callback = function()
-            game:GetService("TeleportService"):Teleport(game.PlaceId, player)
+            pcall(function()
+                TeleportService:Teleport(game.PlaceId, player)
+            end)
         end    
     })
 
-    -- Server Hop
     MiscTab:AddButton({
         Name = "Server Hop",
         Callback = function()
-            local servers = {}
-            local req = game:HttpGet("https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?sortOrder=Asc&limit=100")
-            local body = game:GetService("HttpService"):JSONDecode(req)
-            
-            for i, v in next, body.data do
-                if v.playing ~= v.maxPlayers and v.id ~= game.JobId then
-                    servers[#servers + 1] = v.id
+            pcall(function()
+                local servers = {}
+                local success, result = pcall(function()
+                    return HttpService:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?sortOrder=Asc&limit=100"))
+                end)
+                
+                if success and result.data then
+                    for _, server in pairs(result.data) do
+                        if server.playing < server.maxPlayers and server.id ~= game.JobId then
+                            table.insert(servers, server.id)
+                        end
+                    end
+                    
+                    if #servers > 0 then
+                        local randomServer = servers[math.random(1, #servers)]
+                        TeleportService:TeleportToPlaceInstance(game.PlaceId, randomServer, player)
+                    end
                 end
-            end
-            
-            if #servers > 0 then
-                game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, servers[math.random(1, #servers)], player)
-            end
+            end)
         end    
     })
 
-    -- Update character ketika respawn
-    player.CharacterAdded:Connect(function(newCharacter)
+    -- Character Management
+    local function setupCharacter(newCharacter)
         character = newCharacter
-        humanoid = character:WaitForChild("Humanoid")
-        rootPart = character:WaitForChild("HumanoidRootPart")
+        humanoid = character:WaitForChild("Humanoid", 10)
+        rootPart = character:WaitForChild("HumanoidRootPart", 10)
         
-        -- Reapply settings
-        humanoid.WalkSpeed = walkSpeed
-        humanoid.JumpPower = jumpPower
-        
-        -- Auto respawn logic
-        if autoRespawn then
-            wait(1)
-            if humanoid.Health <= 0 then
-                wait(5)
-                player:LoadCharacter()
+        if humanoid and rootPart then
+            -- Reapply settings
+            humanoid.WalkSpeed = walkSpeed
+            humanoid.JumpPower = jumpPower
+            
+            -- Auto respawn logic
+            if autoRespawn then
+                connections.deathConnection = humanoid.Died:Connect(function()
+                    safeWait(5)
+                    pcall(function()
+                        player:LoadCharacter()
+                    end)
+                end)
             end
         end
+    end
+
+    -- Character respawn handling
+    connections.characterAdded = player.CharacterAdded:Connect(setupCharacter)
+
+    -- Player list update
+    connections.playerAdded = Players.PlayerAdded:Connect(function()
+        safeWait(1)
+        -- Update player dropdown if needed
     end)
 
-    -- Handle death for auto respawn
-    humanoid.Died:Connect(function()
-        if autoRespawn then
-            wait(5)
-            player:LoadCharacter()
-        end
+    connections.playerRemoving = Players.PlayerRemoving:Connect(function()
+        safeWait(1)
+        -- Update player dropdown if needed
     end)
 
-    -- Update player list for teleport dropdown
-    Players.PlayerAdded:Connect(function()
-        wait(1)
-        playerDropdown = {}
-        for _, plr in pairs(Players:GetPlayers()) do
-            if plr ~= player then
-                table.insert(playerDropdown, plr.Name)
+    -- Cleanup function
+    local function cleanup()
+        for name, connection in pairs(connections) do
+            if connection then
+                if typeof(connection) == "RBXScriptConnection" then
+                    connection:Disconnect()
+                elseif typeof(connection) == "thread" then
+                    task.cancel(connection)
+                end
             end
         end
-    end)
+        connections = {}
+    end
 
-    Players.PlayerRemoving:Connect(function()
-        wait(1)
-        playerDropdown = {}
-        for _, plr in pairs(Players:GetPlayers()) do
-            if plr ~= player then
-                table.insert(playerDropdown, plr.Name)
-            end
+    -- Cleanup on window close
+    game:GetService("CoreGui").ChildRemoved:Connect(function(child)
+        if child.Name == "Orion" then
+            cleanup()
         end
     end)
 
-    -- Notification saat script loaded
+    -- Success notification
     OrionLib:MakeNotification({
         Name = "GILONG Hub",
-        Content = "Hub loaded successfully! Ready to slap!",
+        Content = "Hub loaded successfully! Ready to dominate Slap Battles!",
         Image = "rbxassetid://79608248053265",
         Time = 5
     })
@@ -573,7 +717,7 @@ KeyTab:AddTextbox({
                 Image = "rbxassetid://79608248053265",
                 Time = 3
             })
-            wait(1)
+            safeWait(1)
             KeyWindow:Destroy()
             loadMainHub()
         else
@@ -609,21 +753,8 @@ KeyTab:AddButton({
     end    
 })
 
--- Discord Button
-KeyTab:AddButton({
-    Name = "Join Discord",
-    Callback = function()
-        local discordLink = "https://discord.gg/gilonghub"
-        if copyToClipboard(discordLink) then
-            OrionLib:MakeNotification({
-                Name = "GILONG Hub",
-                Content = "Discord link copied!",
-                Image = "rbxassetid://79608248053265",
-                Time = 3
-            })
-        end
-    end    
-})
+-- Key Instructions
+KeyTab:AddParagraph("Instructions", "1. Click 'Get Key' to copy the link\n2. Complete the key system\n3. Enter your key above\n4. Enjoy GILONG Hub!")
 
 -- Initialize Key System
 OrionLib:Init()
