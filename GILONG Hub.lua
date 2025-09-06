@@ -38,147 +38,269 @@ local function copyToClipboard(text)
     return false
 end
 
--- Create GUI Function
+-- Create GUI Function with Orion-like design
 local function createGUI()
     -- Main ScreenGui
     local screenGui = Instance.new("ScreenGui")
     screenGui.Name = "GILONGHub"
     screenGui.Parent = playerGui
     
-    -- Main Frame
+    -- Main Frame (Orion-like dark theme)
     local mainFrame = Instance.new("Frame")
     mainFrame.Name = "MainFrame"
     mainFrame.Parent = screenGui
-    mainFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
     mainFrame.BorderSizePixel = 0
-    mainFrame.Position = UDim2.new(0.1, 0, 0.1, 0)
-    mainFrame.Size = UDim2.new(0, 400, 0, 500)
+    mainFrame.Position = UDim2.new(0.3, 0, 0.2, 0)
+    mainFrame.Size = UDim2.new(0, 550, 0, 400)
     mainFrame.Active = true
     mainFrame.Draggable = true
     
     -- Corner
     local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 10)
+    corner.CornerRadius = UDim.new(0, 8)
     corner.Parent = mainFrame
+    
+    -- Title Bar
+    local titleBar = Instance.new("Frame")
+    titleBar.Name = "TitleBar"
+    titleBar.Parent = mainFrame
+    titleBar.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    titleBar.BorderSizePixel = 0
+    titleBar.Position = UDim2.new(0, 0, 0, 0)
+    titleBar.Size = UDim2.new(1, 0, 0, 35)
+    
+    local titleCorner = Instance.new("UICorner")
+    titleCorner.CornerRadius = UDim.new(0, 8)
+    titleCorner.Parent = titleBar
     
     -- Title
     local title = Instance.new("TextLabel")
     title.Name = "Title"
-    title.Parent = mainFrame
+    title.Parent = titleBar
     title.BackgroundTransparency = 1
-    title.Position = UDim2.new(0, 0, 0, 0)
-    title.Size = UDim2.new(1, 0, 0, 40)
-    title.Text = "GILONG Hub - 99 Night Forest"
+    title.Position = UDim2.new(0, 15, 0, 0)
+    title.Size = UDim2.new(0.8, 0, 1, 0)
+    title.Text = "GILONG Hub"
     title.TextColor3 = Color3.fromRGB(255, 255, 255)
-    title.TextScaled = true
-    title.Font = Enum.Font.GothamBold
+    title.TextSize = 14
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    title.Font = Enum.Font.GothamSemibold
     
-    -- Close Button
+    -- Close Button (Orion style)
     local closeBtn = Instance.new("TextButton")
     closeBtn.Name = "CloseButton"
-    closeBtn.Parent = mainFrame
-    closeBtn.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+    closeBtn.Parent = titleBar
+    closeBtn.BackgroundTransparency = 1
     closeBtn.Position = UDim2.new(1, -30, 0, 5)
     closeBtn.Size = UDim2.new(0, 25, 0, 25)
-    closeBtn.Text = "X"
-    closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    closeBtn.TextScaled = true
+    closeBtn.Text = "✕"
+    closeBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+    closeBtn.TextSize = 16
+    closeBtn.Font = Enum.Font.GothamBold
     
-    local closeBtnCorner = Instance.new("UICorner")
-    closeBtnCorner.CornerRadius = UDim.new(0, 5)
-    closeBtnCorner.Parent = closeBtn
+    closeBtn.MouseEnter:Connect(function()
+        closeBtn.TextColor3 = Color3.fromRGB(255, 100, 100)
+    end)
+    
+    closeBtn.MouseLeave:Connect(function()
+        closeBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+    end)
     
     closeBtn.MouseButton1Click:Connect(function()
         screenGui:Destroy()
     end)
     
-    -- Scroll Frame
-    local scrollFrame = Instance.new("ScrollingFrame")
-    scrollFrame.Name = "ScrollFrame"
-    scrollFrame.Parent = mainFrame
-    scrollFrame.BackgroundTransparency = 1
-    scrollFrame.Position = UDim2.new(0, 10, 0, 50)
-    scrollFrame.Size = UDim2.new(1, -20, 1, -60)
-    scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 800)
-    scrollFrame.ScrollBarThickness = 5
+    -- Tab Container (Left side like Orion)
+    local tabContainer = Instance.new("Frame")
+    tabContainer.Name = "TabContainer"
+    tabContainer.Parent = mainFrame
+    tabContainer.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    tabContainer.BorderSizePixel = 0
+    tabContainer.Position = UDim2.new(0, 0, 0, 35)
+    tabContainer.Size = UDim2.new(0, 150, 1, -35)
     
-    local yPos = 0
+    -- Content Container (Right side)
+    local contentContainer = Instance.new("Frame")
+    contentContainer.Name = "ContentContainer"
+    contentContainer.Parent = mainFrame
+    contentContainer.BackgroundTransparency = 1
+    contentContainer.Position = UDim2.new(0, 150, 0, 35)
+    contentContainer.Size = UDim2.new(1, -150, 1, -35)
     
-    -- Function to create button
-    local function createButton(text, callback)
+    -- Tab System Variables
+    local currentTab = "Combat"
+    local tabFrames = {}
+    
+    -- Create Tab Button Function
+    local function createTabButton(name, icon, yPos)
+        local tabBtn = Instance.new("TextButton")
+        tabBtn.Name = name .. "Tab"
+        tabBtn.Parent = tabContainer
+        tabBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+        tabBtn.BorderSizePixel = 0
+        tabBtn.Position = UDim2.new(0, 5, 0, yPos)
+        tabBtn.Size = UDim2.new(1, -10, 0, 35)
+        tabBtn.Text = icon .. " " .. name
+        tabBtn.TextColor3 = Color3.fromRGB(180, 180, 180)
+        tabBtn.TextSize = 12
+        tabBtn.TextXAlignment = Enum.TextXAlignment.Left
+        tabBtn.Font = Enum.Font.Gotham
+        
+        local tabCorner = Instance.new("UICorner")
+        tabCorner.CornerRadius = UDim.new(0, 6)
+        tabCorner.Parent = tabBtn
+        
+        -- Tab Content Frame
+        local tabFrame = Instance.new("ScrollingFrame")
+        tabFrame.Name = name .. "Frame"
+        tabFrame.Parent = contentContainer
+        tabFrame.BackgroundTransparency = 1
+        tabFrame.Position = UDim2.new(0, 10, 0, 10)
+        tabFrame.Size = UDim2.new(1, -20, 1, -20)
+        tabFrame.CanvasSize = UDim2.new(0, 0, 0, 600)
+        tabFrame.ScrollBarThickness = 4
+        tabFrame.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 100)
+        tabFrame.Visible = (name == "Combat")
+        
+        tabFrames[name] = tabFrame
+        
+        -- Tab Button Click
+        tabBtn.MouseButton1Click:Connect(function()
+            -- Hide all tabs
+            for _, frame in pairs(tabFrames) do
+                frame.Visible = false
+            end
+            
+            -- Reset all tab colors
+            for _, child in pairs(tabContainer:GetChildren()) do
+                if child:IsA("TextButton") then
+                    child.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+                    child.TextColor3 = Color3.fromRGB(180, 180, 180)
+                end
+            end
+            
+            -- Show selected tab
+            tabFrame.Visible = true
+            tabBtn.BackgroundColor3 = Color3.fromRGB(0, 162, 255)
+            tabBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            currentTab = name
+        end)
+        
+        -- Set initial active tab
+        if name == "Combat" then
+            tabBtn.BackgroundColor3 = Color3.fromRGB(0, 162, 255)
+            tabBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        end
+        
+        return tabFrame
+    end
+    
+    -- Create Tabs
+    local combatFrame = createTabButton("Combat", "⚔️", 10)
+    local farmingFrame = createTabButton("Farming", "🌲", 55)
+    local itemsFrame = createTabButton("Items", "📦", 100)
+    local playerFrame = createTabButton("Player", "👤", 145)
+    local miscFrame = createTabButton("Misc", "⚙️", 190)
+    
+    -- Orion-style UI Element Functions
+    local function createButton(parent, text, callback, yPos)
         local button = Instance.new("TextButton")
-        button.Parent = scrollFrame
-        button.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-        button.Position = UDim2.new(0, 0, 0, yPos)
-        button.Size = UDim2.new(1, -10, 0, 35)
+        button.Parent = parent
+        button.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+        button.BorderSizePixel = 0
+        button.Position = UDim2.new(0, 0, 0, yPos or 0)
+        button.Size = UDim2.new(1, -10, 0, 30)
         button.Text = text
         button.TextColor3 = Color3.fromRGB(255, 255, 255)
-        button.TextScaled = true
+        button.TextSize = 12
         button.Font = Enum.Font.Gotham
         
         local buttonCorner = Instance.new("UICorner")
-        buttonCorner.CornerRadius = UDim.new(0, 5)
+        buttonCorner.CornerRadius = UDim.new(0, 4)
         buttonCorner.Parent = button
         
-        button.MouseButton1Click:Connect(callback)
+        button.MouseEnter:Connect(function()
+            button.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+        end)
         
-        yPos = yPos + 45
+        button.MouseLeave:Connect(function()
+            button.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+        end)
+        
+        button.MouseButton1Click:Connect(callback)
         return button
     end
     
-    -- Function to create toggle
-    local function createToggle(text, callback)
+    local function createToggle(parent, text, callback, yPos)
         local frame = Instance.new("Frame")
-        frame.Parent = scrollFrame
-        frame.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-        frame.Position = UDim2.new(0, 0, 0, yPos)
+        frame.Parent = parent
+        frame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+        frame.BorderSizePixel = 0
+        frame.Position = UDim2.new(0, 0, 0, yPos or 0)
         frame.Size = UDim2.new(1, -10, 0, 35)
         
         local frameCorner = Instance.new("UICorner")
-        frameCorner.CornerRadius = UDim.new(0, 5)
+        frameCorner.CornerRadius = UDim.new(0, 4)
         frameCorner.Parent = frame
         
         local label = Instance.new("TextLabel")
         label.Parent = frame
         label.BackgroundTransparency = 1
-        label.Position = UDim2.new(0, 10, 0, 0)
-        label.Size = UDim2.new(0.7, 0, 1, 0)
+        label.Position = UDim2.new(0, 12, 0, 0)
+        label.Size = UDim2.new(0.65, 0, 1, 0)
         label.Text = text
         label.TextColor3 = Color3.fromRGB(255, 255, 255)
-        label.TextScaled = true
+        label.TextSize = 12
         label.TextXAlignment = Enum.TextXAlignment.Left
         label.Font = Enum.Font.Gotham
         
-        local toggle = Instance.new("TextButton")
-        toggle.Parent = frame
-        toggle.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-        toggle.Position = UDim2.new(1, -60, 0, 5)
-        toggle.Size = UDim2.new(0, 50, 0, 25)
-        toggle.Text = "OFF"
-        toggle.TextColor3 = Color3.fromRGB(255, 255, 255)
-        toggle.TextScaled = true
-        toggle.Font = Enum.Font.GothamBold
+        -- Orion-style toggle switch
+        local toggleBg = Instance.new("Frame")
+        toggleBg.Parent = frame
+        toggleBg.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+        toggleBg.BorderSizePixel = 0
+        toggleBg.Position = UDim2.new(1, -50, 0.5, -8)
+        toggleBg.Size = UDim2.new(0, 40, 0, 16)
         
-        local toggleCorner = Instance.new("UICorner")
-        toggleCorner.CornerRadius = UDim.new(0, 5)
-        toggleCorner.Parent = toggle
+        local toggleBgCorner = Instance.new("UICorner")
+        toggleBgCorner.CornerRadius = UDim.new(0, 8)
+        toggleBgCorner.Parent = toggleBg
+        
+        local toggleBtn = Instance.new("Frame")
+        toggleBtn.Parent = toggleBg
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
+        toggleBtn.BorderSizePixel = 0
+        toggleBtn.Position = UDim2.new(0, 2, 0, 2)
+        toggleBtn.Size = UDim2.new(0, 12, 0, 12)
+        
+        local toggleBtnCorner = Instance.new("UICorner")
+        toggleBtnCorner.CornerRadius = UDim.new(0, 6)
+        toggleBtnCorner.Parent = toggleBtn
+        
+        local clickDetector = Instance.new("TextButton")
+        clickDetector.Parent = frame
+        clickDetector.BackgroundTransparency = 1
+        clickDetector.Size = UDim2.new(1, 0, 1, 0)
+        clickDetector.Text = ""
         
         local isToggled = false
         
-        toggle.MouseButton1Click:Connect(function()
+        clickDetector.MouseButton1Click:Connect(function()
             isToggled = not isToggled
             if isToggled then
-                toggle.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-                toggle.Text = "ON"
+                toggleBg.BackgroundColor3 = Color3.fromRGB(0, 162, 255)
+                toggleBtn.Position = UDim2.new(1, -14, 0, 2)
+                toggleBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
             else
-                toggle.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-                toggle.Text = "OFF"
+                toggleBg.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+                toggleBtn.Position = UDim2.new(0, 2, 0, 2)
+                toggleBtn.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
             end
             callback(isToggled)
         end)
         
-        yPos = yPos + 45
-        return toggle
+        return frame
     end
     
     -- Function to create slider
