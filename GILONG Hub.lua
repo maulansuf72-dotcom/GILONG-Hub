@@ -3,7 +3,18 @@
 -- Key System: AyamGoreng!
 -- Version: Final Release
 
-local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/shlexware/Orion/main/source')))()
+-- Load Orion Library with error handling
+local OrionLib
+local success, result = pcall(function()
+    return loadstring(game:HttpGet('https://raw.githubusercontent.com/shlexware/Orion/main/source'))()
+end)
+
+if success then
+    OrionLib = result
+else
+    -- Fallback to alternative Orion source
+    OrionLib = loadstring(game:HttpGet('https://raw.githubusercontent.com/ionlyusegithubformcmods/1-Line-Scripts/main/Orion%20Lib'))()
+end
 
 -- Key System Variables
 local keyCorrect = false
