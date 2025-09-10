@@ -49,8 +49,11 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 local VirtualUser = game:GetService("VirtualUser")
 local VirtualInputManager = game:GetService("VirtualInputManager")
+local GuiService = game:GetService("GuiService")
+local TweenService = game:GetService("TweenService")
 
 local player = Players.LocalPlayer
+local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 
 -- Global Variables
 _G.autoSlap = false
@@ -72,6 +75,9 @@ _G.hitboxSize = 10
 _G.hitboxTransparency = 0.7
 _G.reachHack = false
 _G.reachSize = 20
+_G.showHP = false
+_G.lowHPAlert = false
+_G.lowHPThreshold = 20
 
 -- Anti-Cheat Bypass Variables
 _G.humanizedSlap = true
@@ -190,39 +196,225 @@ local function shouldBypassDetection()
     return false
 end
 
--- Simple Hit System
-local function simpleHit(target)
+-- HP System
+local hpGui = nil
+local hpLabel = nil
+
+local function createHPDisplay()
+    if hpGui then return end
+    
+    hpGui = Instance.new("ScreenGui")
+    hpGui.Name = "HPDisplay"
+    hpGui.Parent = player.PlayerGui
+    
+    local frame = Instance.new("Frame")
+    -- Mobile-friendly sizing
+    if isMobile then
+        frame.Size = UDim2.new(0, 250, 0, 80)
+        frame.Position = UDim2.new(0, 10, 0, 150)
+    else
+        frame.Size = UDim2.new(0, 200, 0, 60)
+        frame.Position = UDim2.new(0, 10, 0, 100)
+    end
+    frame.BackgroundColor3 = Color3.new(0, 0, 0)
+    frame.BackgroundTransparency = 0.3
+    frame.BorderSizePixel = 0
+    frame.Parent = hpGui
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = frame
+    
+    hpLabel = Instance.new("TextLabel")
+    hpLabel.Size = UDim2.new(1, 0, 1, 0)
+    hpLabel.Position = UDim2.new(0, 0, 0, 0)
+    hpLabel.BackgroundTransparency = 1
+    hpLabel.Text = "HP: 100/100"
+    hpLabel.TextColor3 = Color3.new(0, 1, 0)
+    hpLabel.TextScaled = true
+    hpLabel.Font = Enum.Font.GothamBold
+    hpLabel.Parent = frame
+end
+
+local function removeHPDisplay()
+    if hpGui then
+        hpGui:Destroy()
+        hpGui = nil
+        hpLabel = nil
+    end
+end
+
+local function updateHP()
+    if not _G.showHP or not hpLabel then return end
+    
+    local character = player.Character
+    if not character or not character:FindFirstChild("Humanoid") then return end
+    
+    local humanoid = character.Humanoid
+    local currentHP = math.floor(humanoid.Health)
+    local maxHP = math.floor(humanoid.MaxHealth)
+    
+    hpLabel.Text = "HP: " .. currentHP .. "/" .. maxHP
+    
+    -- Color based on HP percentage
+    local hpPercent = (currentHP / maxHP) * 100
+    if hpPercent > 70 then
+        hpLabel.TextColor3 = Color3.new(0, 1, 0) -- Green
+    elseif hpPercent > 30 then
+        hpLabel.TextColor3 = Color3.new(1, 1, 0) -- Yellow
+    else
+        hpLabel.TextColor3 = Color3.new(1, 0, 0) -- Red
+    end
+    
+    -- Low HP Alert
+    if _G.lowHPAlert and hpPercent <= _G.lowHPThreshold then
+        Rayfield:Notify({
+            Title = "⚠️ LOW HP WARNING!",
+            Content = "Health: " .. currentHP .. "/" .. maxHP .. " (" .. math.floor(hpPercent) .. "%)",
+            Duration = 2,
+        })
+    end
+end
+
+-- Working Slap Battles Hit System
+local hitboxParts = {}
+
+local function createHitbox()
+    if not _G.reachHack then return end
+    
+    local character = player.Character
+    if not character then return end
+    
+    local tool = character:FindFirstChildOfClass("Tool")
+    if tool and tool:FindFirstChild("Handle") then
+        local handle = tool.Handle
+        
+        -- Store original size
+        if not originalValues[tool.Name] then
+            originalValues[tool.Name] = {
+                size = handle.Size,
+                transparency = handle.Transparency
+            }
+        end
+        
+        -- HP Glove specific handling
+        local toolName = tool.Name:lower()
+        local isHPGlove = toolName:find("hp") or toolName:find("health") or toolName:find("heal")
+        
+        if isHPGlove then
+            -- HP glove needs larger hitbox for better healing range
+            handle.Size = Vector3.new(_G.reachSize * 1.5, _G.reachSize * 1.5, _G.reachSize * 1.5)
+            handle.Transparency = 0.3 -- More visible for HP glove
+        else
+            -- Regular gloves
+            handle.Size = Vector3.new(_G.reachSize, _G.reachSize, _G.reachSize)
+            handle.Transparency = 0.5
+        end
+        
+        handle.CanCollide = false
+    end
+end
+
+local function resetHitbox()
+    local character = player.Character
+    if not character then return end
+    
+    local tool = character:FindFirstChildOfClass("Tool")
+    if tool and tool:FindFirstChild("Handle") and originalValues[tool.Name] then
+        local handle = tool.Handle
+        local original = originalValues[tool.Name]
+        
+        handle.Size = original.size
+        handle.Transparency = original.transparency
+    end
+end
+
+local function performHit(target)
     if not target or not target.Character then return false end
     
     local character = player.Character
     if not character then return false end
     
     safeCall(function()
-        -- Basic tool activation
         local tool = character:FindFirstChildOfClass("Tool")
         if tool then
+            local toolName = tool.Name:lower()
+            local isHPGlove = toolName:find("hp") or toolName:find("health") or toolName:find("heal")
+            
+            -- Multiple activation methods
             tool:Activate()
+            
+            -- HP Glove specific activation
+            if isHPGlove then
+                -- HP glove needs multiple activations for healing
+                task.wait(0.05)
+                tool:Activate()
+                task.wait(0.05)
+                tool:Activate()
+            end
+            
+            -- Fire tool remotes with target
+            for _, obj in pairs(tool:GetDescendants()) do
+                if obj:IsA("RemoteEvent") then
+                    pcall(function()
+                        obj:FireServer(target.Character.HumanoidRootPart)
+                        obj:FireServer(target.Character)
+                        
+                        -- HP glove specific parameters
+                        if isHPGlove then
+                            obj:FireServer(target.Character.Humanoid)
+                            obj:FireServer("heal")
+                            obj:FireServer({action = "heal", target = target.Character})
+                        end
+                    end)
+                end
+            end
         end
         
-        -- Simple mouse click on target
+        -- Mouse/Touch targeting
         local camera = Workspace.CurrentCamera
         if camera and target.Character.HumanoidRootPart then
             local targetPos = camera:WorldToScreenPoint(target.Character.HumanoidRootPart.Position)
             if targetPos.Z > 0 then
-                VirtualInputManager:SendMouseButtonEvent(targetPos.X, targetPos.Y, 0, true, game, 1)
-                task.wait(0.05)
-                VirtualInputManager:SendMouseButtonEvent(targetPos.X, targetPos.Y, 0, false, game, 1)
+                if isMobile then
+                    -- Mobile touch simulation
+                    VirtualInputManager:SendTouchEvent(Enum.UserInputType.Touch, Enum.UserInputState.Begin, Vector3.new(targetPos.X, targetPos.Y, 0))
+                    task.wait(0.1)
+                    VirtualInputManager:SendTouchEvent(Enum.UserInputType.Touch, Enum.UserInputState.End, Vector3.new(targetPos.X, targetPos.Y, 0))
+                else
+                    -- PC mouse simulation
+                    VirtualInputManager:SendMouseButtonEvent(targetPos.X, targetPos.Y, 0, true, game, 1)
+                    task.wait(0.1)
+                    VirtualInputManager:SendMouseButtonEvent(targetPos.X, targetPos.Y, 0, false, game, 1)
+                end
             end
         end
         
-        -- Fire basic remotes
+        -- Global remotes
         for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
-            if remote:IsA("RemoteEvent") and remote.Name:lower() == "b" then
-                pcall(function()
-                    remote:FireServer()
-                end)
-                break
+            if remote:IsA("RemoteEvent") then
+                local name = remote.Name:lower()
+                if name == "b" or name == "slap" or name:find("hit") or name:find("heal") then
+                    pcall(function()
+                        remote:FireServer(target.Character.HumanoidRootPart)
+                        remote:FireServer(target.Character)
+                        remote:FireServer()
+                    end)
+                end
             end
+        end
+        
+        -- Key/Touch simulation
+        if isMobile then
+            -- Mobile specific input simulation
+            VirtualUser:CaptureController()
+            VirtualUser:ClickButton2(Vector2.new(0, 0))
+        else
+            -- PC input simulation
+            VirtualUser:TypeText(" ")
+            VirtualUser:Button1Down(Vector2.new(0, 0))
+            task.wait(0.1)
+            VirtualUser:Button1Up(Vector2.new(0, 0))
         end
     end)
     
@@ -251,7 +443,7 @@ local function autoSlap()
                 task.wait(getHumanizedDelay())
             end
             
-            if simpleHit(target) then
+            if performHit(target) then
                 addSlapToHistory()
             end
         end
@@ -281,7 +473,7 @@ local function killAura()
                 
                 task.wait(getHumanizedDelay())
                 
-                if simpleHit(plr) then
+                if performHit(plr) then
                     addSlapToHistory()
                     targetsHit = targetsHit + 1
                 end
@@ -393,7 +585,7 @@ CombatTab:CreateToggle({
         if Value then
             Rayfield:Notify({
                 Title = "Auto Slap Enabled",
-                Content = "Automatically slaps nearest players. Works better with Reach Hack.",
+                Content = "Automatically slaps nearest players. Enable Hitbox Expander for better range!",
                 Duration = 3,
             })
         end
@@ -409,7 +601,7 @@ CombatTab:CreateToggle({
         if Value then
             Rayfield:Notify({
                 Title = "Kill Aura Enabled",
-                Content = "Attacks multiple players in range. Enable Reach Hack for better hits.",
+                Content = "Attacks multiple players in range. Use with Hitbox Expander!",
                 Duration = 3,
             })
         end
@@ -480,30 +672,36 @@ CombatTab:CreateSlider({
 })
 
 CombatTab:CreateToggle({
-    Name = "Extended Range",
+    Name = "Hitbox Expander",
     CurrentValue = false,
     Flag = "ReachHack",
     Callback = function(Value)
         _G.reachHack = Value
         if Value then
+            createHitbox()
             Rayfield:Notify({
-                Title = "Extended Range Enabled",
-                Content = "Increases hit detection range. Simple and effective.",
+                Title = "Hitbox Expander Enabled",
+                Content = "Mobile & PC compatible! Works with all gloves including HP.",
                 Duration = 3,
             })
+        else
+            resetHitbox()
         end
     end,
 })
 
 CombatTab:CreateSlider({
-    Name = "Range Extension",
-    Range = {5, 50},
+    Name = "Hitbox Size",
+    Range = {10, 100},
     Increment = 5,
     Suffix = " studs",
-    CurrentValue = 15,
+    CurrentValue = 25,
     Flag = "ReachSize",
     Callback = function(Value)
         _G.reachSize = Value
+        if _G.reachHack then
+            createHitbox()
+        end
     end,
 })
 
@@ -675,25 +873,123 @@ DebugTab:CreateParagraph({Title = "Bypass Info", Content = "Humanized slapping u
 DebugTab:CreateParagraph({Title = "Reach System", Content = "Reach Hack extends your tool's reach by making it bigger and adding invisible parts. More reliable than hitbox expansion."})
 
 DebugTab:CreateButton({
-    Name = "Test Hit System",
+    Name = "Test Hitbox",
     Callback = function()
         local target = getClosestPlayer()
         if target then
-            local success = simpleHit(target)
+            local character = player.Character
+            local tool = character and character:FindFirstChildOfClass("Tool")
+            local toolName = tool and tool.Name or "Unknown"
+            local isHPGlove = toolName:lower():find("hp") or toolName:lower():find("health") or toolName:lower():find("heal")
+            
+            local success = performHit(target)
             Rayfield:Notify({
-                Title = "Hit Test",
-                Content = success and "Hit attempt sent to " .. target.Name or "No target found",
-                Duration = 2,
+                Title = "Hitbox Test",
+                Content = "Testing " .. toolName .. (isHPGlove and " (HP Glove)" or "") .. " on " .. target.Name,
+                Duration = 3,
             })
         else
             Rayfield:Notify({
-                Title = "Hit Test",
-                Content = "No target found nearby",
+                Title = "Hitbox Test",
+                Content = "No players nearby to test",
                 Duration = 2,
             })
         end
     end,
 })
+
+DebugTab:CreateButton({
+    Name = "Reset Hitbox",
+    Callback = function()
+        resetHitbox()
+        Rayfield:Notify({
+            Title = "Hitbox Reset",
+            Content = "Hitbox reset to original size",
+            Duration = 2,
+        })
+    end,
+})
+
+-- HP Tab
+local HPTab = Window:CreateTab("🩺 HP System", 4483362458)
+
+HPTab:CreateToggle({
+    Name = "Show HP Display",
+    CurrentValue = false,
+    Flag = "ShowHP",
+    Callback = function(Value)
+        _G.showHP = Value
+        if Value then
+            createHPDisplay()
+            Rayfield:Notify({
+                Title = "HP Display Enabled",
+                Content = "Health display is now visible on screen",
+                Duration = 3,
+            })
+        else
+            removeHPDisplay()
+        end
+    end,
+})
+
+HPTab:CreateToggle({
+    Name = "Low HP Alert",
+    CurrentValue = false,
+    Flag = "LowHPAlert",
+    Callback = function(Value)
+        _G.lowHPAlert = Value
+        if Value then
+            Rayfield:Notify({
+                Title = "Low HP Alert Enabled",
+                Content = "You'll get notified when HP is low",
+                Duration = 3,
+            })
+        end
+    end,
+})
+
+HPTab:CreateSlider({
+    Name = "Low HP Threshold",
+    Range = {10, 50},
+    Increment = 5,
+    Suffix = "%",
+    CurrentValue = 20,
+    Flag = "LowHPThreshold",
+    Callback = function(Value)
+        _G.lowHPThreshold = Value
+    end,
+})
+
+HPTab:CreateButton({
+    Name = "Check Current HP",
+    Callback = function()
+        local character = player.Character
+        if character and character:FindFirstChild("Humanoid") then
+            local humanoid = character.Humanoid
+            local currentHP = math.floor(humanoid.Health)
+            local maxHP = math.floor(humanoid.MaxHealth)
+            local hpPercent = math.floor((currentHP / maxHP) * 100)
+            
+            Rayfield:Notify({
+                Title = "Current Health Status",
+                Content = "HP: " .. currentHP .. "/" .. maxHP .. " (" .. hpPercent .. "%)",
+                Duration = 4,
+            })
+        else
+            Rayfield:Notify({
+                Title = "Health Check Failed",
+                Content = "Cannot read health - character not found",
+                Duration = 3,
+            })
+        end
+    end,
+})
+
+HPTab:CreateParagraph({Title = "HP System Info", Content = "Monitor your health in real-time. The HP display shows current/max health with color coding: Green (70%+), Yellow (30-70%), Red (<30%). Low HP alerts will notify you when health drops below the threshold."})
+
+HPTab:CreateParagraph({Title = "HP Glove Support", Content = "The Hitbox Expander fully supports HP glove! When using HP glove, the hitbox becomes 1.5x larger for better healing range, and the hit system uses special healing parameters for optimal performance."})
+
+HPTab:CreateParagraph({Title = "Mobile Support", Content = "This script is fully compatible with mobile devices! Touch controls are automatically detected and used. The HP display is optimized for mobile screens, and all features work seamlessly on both PC and mobile."})
 
 -- Main Loop
 local loopCount = 0
@@ -710,11 +1006,15 @@ RunService.Heartbeat:Connect(function()
     if _G.antiVoid then antiVoid() end
     if _G.antiAFK then antiAFK() end
     
+    -- Update HP display
+    if _G.showHP and loopCount % 30 == 0 then
+        updateHP()
+    end
+    
     if loopCount % 5 == 0 then
         if _G.reachExtend then reachExtend() end
-        -- Update reach system every 5 frames
-        if _G.reachHack and loopCount % 30 == 0 then
-            -- Periodic reach validation
+        if _G.reachHack and loopCount % 10 == 0 then
+            createHitbox()
         end
     end
 end)
@@ -722,7 +1022,7 @@ end)
 -- Notification
 Rayfield:Notify({
    Title = "GILONG Hub Loaded!",
-   Content = "Slap Battles Script Ready! 👊💥",
+   Content = "Slap Battles Script Ready! " .. (isMobile and "📱 Mobile Mode" or "💻 PC Mode") .. " 👊💥",
    Duration = 5,
    Image = 4483362458,
    Actions = {
