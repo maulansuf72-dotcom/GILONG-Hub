@@ -189,6 +189,62 @@ local function shouldBypassDetection()
 end
 
 -- Hitbox Expansion System
+local hitboxParts = {}
+
+local function createInvisibleHitbox()
+    if not _G.hitboxExpand then return end
+    
+    local character = player.Character
+    if not character or not character:FindFirstChild("HumanoidRootPart") then return end
+    
+    -- Clean up existing hitbox parts
+    for _, part in pairs(hitboxParts) do
+        if part and part.Parent then
+            part:Destroy()
+        end
+    end
+    hitboxParts = {}
+    
+    -- Create invisible hitbox parts around player
+    local rootPart = character.HumanoidRootPart
+    local hitboxSize = _G.hitboxSize
+    
+    safeCall(function()
+        -- Create multiple invisible parts for better hit detection
+        local positions = {
+            Vector3.new(hitboxSize/2, 0, 0),    -- Right
+            Vector3.new(-hitboxSize/2, 0, 0),   -- Left
+            Vector3.new(0, 0, hitboxSize/2),    -- Front
+            Vector3.new(0, 0, -hitboxSize/2),   -- Back
+            Vector3.new(0, hitboxSize/2, 0),    -- Up
+            Vector3.new(0, -hitboxSize/2, 0)    -- Down
+        }
+        
+        for i, offset in pairs(positions) do
+            local hitboxPart = Instance.new("Part")
+            hitboxPart.Name = "HitboxExpander_" .. i
+            hitboxPart.Size = Vector3.new(hitboxSize/3, hitboxSize/3, hitboxSize/3)
+            hitboxPart.Material = Enum.Material.ForceField
+            hitboxPart.Transparency = 0.95
+            hitboxPart.CanCollide = false
+            hitboxPart.Anchored = false
+            hitboxPart.TopSurface = Enum.SurfaceType.Smooth
+            hitboxPart.BottomSurface = Enum.SurfaceType.Smooth
+            
+            -- Weld to player
+            local weld = Instance.new("WeldConstraint")
+            weld.Part0 = rootPart
+            weld.Part1 = hitboxPart
+            weld.Parent = hitboxPart
+            
+            hitboxPart.CFrame = rootPart.CFrame * CFrame.new(offset)
+            hitboxPart.Parent = character
+            
+            table.insert(hitboxParts, hitboxPart)
+        end
+    end)
+end
+
 local function expandHitbox()
     if not _G.hitboxExpand then return end
     
@@ -210,33 +266,28 @@ local function expandHitbox()
         
         -- Apply hitbox expansion with bypass techniques
         safeCall(function()
-            -- Gradual size increase to avoid detection
             local targetSize = Vector3.new(_G.hitboxSize, _G.hitboxSize, _G.hitboxSize)
-            local currentSize = handle.Size
-            local step = (targetSize - currentSize) * 0.1
-            
-            if (targetSize - currentSize).Magnitude > 0.1 then
-                handle.Size = currentSize + step
-            else
-                handle.Size = targetSize
-            end
-            
+            handle.Size = targetSize
             handle.Transparency = _G.hitboxTransparency
             handle.CanCollide = false
             
             -- Anti-detection: Randomize transparency slightly
             if _G.bypassMode then
-                local randomOffset = math.random(-5, 5) / 100
-                handle.Transparency = math.clamp(_G.hitboxTransparency + randomOffset, 0, 1)
+                local randomOffset = math.random(-3, 3) / 100
+                handle.Transparency = math.clamp(_G.hitboxTransparency + randomOffset, 0.1, 1)
             end
         end)
     end
+    
+    -- Update invisible hitbox
+    createInvisibleHitbox()
 end
 
 local function resetHitbox()
     local character = player.Character
     if not character then return end
     
+    -- Reset tool hitbox
     local tool = character:FindFirstChildOfClass("Tool")
     if tool and tool:FindFirstChild("Handle") and originalValues[tool.Name] then
         local handle = tool.Handle
@@ -248,6 +299,14 @@ local function resetHitbox()
             handle.CanCollide = original.canCollide
         end)
     end
+    
+    -- Clean up invisible hitbox parts
+    for _, part in pairs(hitboxParts) do
+        if part and part.Parent then
+            part:Destroy()
+        end
+    end
+    hitboxParts = {}
 end
 
 -- Combat Features
@@ -286,12 +345,25 @@ local function autoSlap()
                     for _, obj in pairs(tool:GetDescendants()) do
                         if obj:IsA("RemoteEvent") and attempts < 2 then
                             pcall(function()
-                                obj:FireServer()
-                                obj:FireServer(target.Character.HumanoidRootPart)
-                                -- Additional parameters for better hit detection
+                                -- Enhanced hit detection for hitbox mode
                                 if _G.hitboxExpand then
+                                    -- Try multiple parameter combinations
+                                    obj:FireServer(target.Character.HumanoidRootPart)
                                     obj:FireServer(target.Character)
                                     obj:FireServer(target.Character.HumanoidRootPart.Position)
+                                    obj:FireServer(target.Character.HumanoidRootPart.CFrame)
+                                    obj:FireServer({Target = target.Character})
+                                    obj:FireServer({Hit = target.Character.HumanoidRootPart})
+                                    
+                                    -- Try with hitbox parts as hit targets
+                                    for _, hitboxPart in pairs(hitboxParts) do
+                                        if hitboxPart and hitboxPart.Parent then
+                                            obj:FireServer(hitboxPart)
+                                        end
+                                    end
+                                else
+                                    obj:FireServer()
+                                    obj:FireServer(target.Character.HumanoidRootPart)
                                 end
                             end)
                             attempts = attempts + 1
@@ -319,9 +391,18 @@ local function autoSlap()
                            name == "remote" or name:find("glove") or name:find("attack") or
                            (name:len() == 1 and math.random(1, 3) == 1) then
                             pcall(function()
-                                remote:FireServer()
-                                if math.random(1, 2) == 1 then
+                                if _G.hitboxExpand then
+                                    -- Enhanced remote calls for hitbox
+                                    remote:FireServer(target.Character.HumanoidRootPart)
                                     remote:FireServer(target.Character)
+                                    remote:FireServer(target.Character.HumanoidRootPart.Position)
+                                    remote:FireServer({Target = target.Character})
+                                    remote:FireServer({Hit = target.Character.HumanoidRootPart})
+                                else
+                                    remote:FireServer()
+                                    if math.random(1, 2) == 1 then
+                                        remote:FireServer(target.Character)
+                                    end
                                 end
                             end)
                             remoteAttempts = remoteAttempts + 1
@@ -389,11 +470,22 @@ local function killAura()
                             local name = remote.Name:lower()
                             if name == "b" or name:find("slap") then
                                 pcall(function()
-                                    remote:FireServer()
-                                    -- Enhanced parameters for hitbox mode
                                     if _G.hitboxExpand then
+                                        -- Enhanced parameters for hitbox mode
+                                        remote:FireServer(plr.Character.HumanoidRootPart)
                                         remote:FireServer(plr.Character)
                                         remote:FireServer(plr.Character.HumanoidRootPart.Position)
+                                        remote:FireServer(plr.Character.HumanoidRootPart.CFrame)
+                                        remote:FireServer({Target = plr.Character})
+                                        
+                                        -- Try with hitbox parts
+                                        for _, hitboxPart in pairs(hitboxParts) do
+                                            if hitboxPart and hitboxPart.Parent then
+                                                remote:FireServer(hitboxPart)
+                                            end
+                                        end
+                                    else
+                                        remote:FireServer()
                                     end
                                 end)
                                 attempts = attempts + 1
@@ -605,9 +697,10 @@ CombatTab:CreateToggle({
     Callback = function(Value)
         _G.hitboxExpand = Value
         if Value then
+            createInvisibleHitbox()
             Rayfield:Notify({
                 Title = "Hitbox Expand Enabled",
-                Content = "Expands your glove hitbox for easier hits. Includes anti-cheat bypass.",
+                Content = "Enhanced hitbox system with invisible parts. Better hit detection.",
                 Duration = 3,
             })
         else
@@ -834,7 +927,7 @@ RunService.Heartbeat:Connect(function()
     if _G.antiVoid then antiVoid() end
     if _G.antiAFK then antiAFK() end
     
-    if loopCount % 10 == 0 then
+    if loopCount % 5 == 0 then
         if _G.reachExtend then reachExtend() end
         if _G.hitboxExpand then expandHitbox() end
     end
