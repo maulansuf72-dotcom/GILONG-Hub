@@ -67,20 +67,9 @@ _G.antiVoid = false
 _G.antiAFK = false
 _G.reachExtend = false
 _G.reachDistance = 25
-
--- Glove-specific configurations
-local gloveConfigs = {
-    ["Default"] = {range = 15, hitbox = "normal", method = "standard"},
-    ["Extended"] = {range = 25, hitbox = "extended", method = "reach"},
-    ["Megarock"] = {range = 30, hitbox = "large", method = "heavy"},
-    ["Killstreak"] = {range = 20, hitbox = "normal", method = "fast"},
-    ["Reverse"] = {range = 15, hitbox = "reverse", method = "special"},
-    ["Shukuchi"] = {range = 40, hitbox = "teleport", method = "instant"},
-    ["Za Hando"] = {range = 35, hitbox = "void", method = "erase"},
-    ["Stop Sign"] = {range = 18, hitbox = "normal", method = "stun"},
-    ["Pusher"] = {range = 22, hitbox = "push", method = "knockback"},
-    ["Anchor"] = {range = 16, hitbox = "normal", method = "pull"}
-}
+_G.hitboxExpand = false
+_G.hitboxSize = 10
+_G.hitboxTransparency = 0.7
 
 -- Anti-Cheat Bypass Variables
 _G.humanizedSlap = true
@@ -114,35 +103,17 @@ local function getDistance(part1, part2)
     return (part1.Position - part2.Position).Magnitude
 end
 
-local function getCurrentGlove()
-    local character = player.Character
-    if character then
-        local tool = character:FindFirstChildOfClass("Tool")
-        if tool then
-            return tool.Name
-        end
-    end
-    return "Default"
-end
-
-local function getGloveConfig(gloveName)
-    return gloveConfigs[gloveName] or gloveConfigs["Default"]
-end
-
 local function getClosestPlayer()
     local character = player.Character
     if not character or not character:FindFirstChild("HumanoidRootPart") then return nil end
     
     local closestPlayer = nil
     local closestDistance = math.huge
-    local currentGlove = getCurrentGlove()
-    local config = getGloveConfig(currentGlove)
-    local effectiveRange = config.range
     
     for _, plr in pairs(Players:GetPlayers()) do
         if plr ~= player and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
             local distance = getDistance(character.HumanoidRootPart, plr.Character.HumanoidRootPart)
-            if distance < closestDistance and distance <= effectiveRange then
+            if distance < closestDistance then
                 closestDistance = distance
                 closestPlayer = plr
             end
@@ -217,6 +188,68 @@ local function shouldBypassDetection()
     return false
 end
 
+-- Hitbox Expansion System
+local function expandHitbox()
+    if not _G.hitboxExpand then return end
+    
+    local character = player.Character
+    if not character then return end
+    
+    local tool = character:FindFirstChildOfClass("Tool")
+    if tool and tool:FindFirstChild("Handle") then
+        local handle = tool.Handle
+        
+        -- Store original values if not already stored
+        if not originalValues[tool.Name] then
+            originalValues[tool.Name] = {
+                size = handle.Size,
+                transparency = handle.Transparency,
+                canCollide = handle.CanCollide
+            }
+        end
+        
+        -- Apply hitbox expansion with bypass techniques
+        safeCall(function()
+            -- Gradual size increase to avoid detection
+            local targetSize = Vector3.new(_G.hitboxSize, _G.hitboxSize, _G.hitboxSize)
+            local currentSize = handle.Size
+            local step = (targetSize - currentSize) * 0.1
+            
+            if (targetSize - currentSize).Magnitude > 0.1 then
+                handle.Size = currentSize + step
+            else
+                handle.Size = targetSize
+            end
+            
+            handle.Transparency = _G.hitboxTransparency
+            handle.CanCollide = false
+            
+            -- Anti-detection: Randomize transparency slightly
+            if _G.bypassMode then
+                local randomOffset = math.random(-5, 5) / 100
+                handle.Transparency = math.clamp(_G.hitboxTransparency + randomOffset, 0, 1)
+            end
+        end)
+    end
+end
+
+local function resetHitbox()
+    local character = player.Character
+    if not character then return end
+    
+    local tool = character:FindFirstChildOfClass("Tool")
+    if tool and tool:FindFirstChild("Handle") and originalValues[tool.Name] then
+        local handle = tool.Handle
+        local original = originalValues[tool.Name]
+        
+        safeCall(function()
+            handle.Size = original.size
+            handle.Transparency = original.transparency
+            handle.CanCollide = original.canCollide
+        end)
+    end
+end
+
 -- Combat Features
 local function autoSlap()
     if not _G.autoSlap then return end
@@ -228,13 +261,11 @@ local function autoSlap()
         return
     end
     
-    local currentGlove = getCurrentGlove()
-    local config = getGloveConfig(currentGlove)
     local target = getClosestPlayer()
     
     if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
         local distance = getDistance(character.HumanoidRootPart, target.Character.HumanoidRootPart)
-        local effectiveRange = math.max(_G.slapRange, config.range)
+        local effectiveRange = _G.hitboxExpand and (_G.slapRange + _G.hitboxSize) or _G.slapRange
         
         if distance <= effectiveRange then
             safeCall(function()
@@ -244,45 +275,23 @@ local function autoSlap()
                 
                 local tool = character:FindFirstChildOfClass("Tool")
                 if tool then
-                    -- Glove-specific activation
-                    if config.method == "instant" then
-                        -- For teleport gloves like Shukuchi
-                        tool:Activate()
-                        task.wait(0.1)
-                        tool:Activate()
-                    elseif config.method == "heavy" then
-                        -- For heavy gloves like Megarock
-                        tool:Activate()
-                        if _G.humanizedSlap then
-                            task.wait(math.random(100, 200) / 1000)
-                        end
-                    else
-                        -- Standard activation
-                        tool:Activate()
-                    end
+                    tool:Activate()
                     
                     if _G.humanizedSlap then
                         task.wait(math.random(10, 50) / 1000)
                     end
                     
-                    -- Glove-specific remote handling
+                    -- Enhanced remote handling with hitbox support
                     local attempts = 0
-                    local maxAttempts = config.method == "fast" and 3 or 2
-                    
                     for _, obj in pairs(tool:GetDescendants()) do
-                        if obj:IsA("RemoteEvent") and attempts < maxAttempts then
+                        if obj:IsA("RemoteEvent") and attempts < 2 then
                             pcall(function()
-                                if config.hitbox == "extended" or config.hitbox == "large" then
-                                    -- For extended reach gloves
-                                    obj:FireServer(target.Character.HumanoidRootPart.Position)
+                                obj:FireServer()
+                                obj:FireServer(target.Character.HumanoidRootPart)
+                                -- Additional parameters for better hit detection
+                                if _G.hitboxExpand then
                                     obj:FireServer(target.Character)
-                                elseif config.hitbox == "teleport" then
-                                    -- For teleport gloves
-                                    obj:FireServer(target.Character.HumanoidRootPart.CFrame)
-                                else
-                                    -- Standard parameters
-                                    obj:FireServer()
-                                    obj:FireServer(target.Character.HumanoidRootPart)
+                                    obj:FireServer(target.Character.HumanoidRootPart.Position)
                                 end
                             end)
                             attempts = attempts + 1
@@ -343,11 +352,9 @@ local function killAura()
     local character = player.Character
     if not character or not character:FindFirstChild("HumanoidRootPart") then return end
     
-    local currentGlove = getCurrentGlove()
-    local config = getGloveConfig(currentGlove)
     local targetsHit = 0
-    local maxTargets = config.method == "fast" and 3 or 2
-    local effectiveRange = math.max(_G.auraRange, config.range)
+    local maxTargets = _G.hitboxExpand and 4 or 2
+    local effectiveRange = _G.hitboxExpand and (_G.auraRange + _G.hitboxSize) or _G.auraRange
     
     for _, plr in pairs(Players:GetPlayers()) do
         if targetsHit >= maxTargets then break end
@@ -366,15 +373,12 @@ local function killAura()
                     if math.random(1, 3) <= 2 then
                         local tool = character:FindFirstChildOfClass("Tool")
                         if tool then
-                            -- Glove-specific aura activation
-                            if config.method == "instant" then
-                                tool:Activate()
-                                task.wait(0.05)
-                            elseif config.method == "heavy" then
-                                tool:Activate()
-                                task.wait(0.15)
-                            else
-                                tool:Activate()
+                            tool:Activate()
+                            
+                            -- Enhanced activation for hitbox mode
+                            if _G.hitboxExpand then
+                                task.wait(0.02)
+                                tool:Activate() -- Double activation for better hit detection
                             end
                         end
                     end
@@ -386,6 +390,11 @@ local function killAura()
                             if name == "b" or name:find("slap") then
                                 pcall(function()
                                     remote:FireServer()
+                                    -- Enhanced parameters for hitbox mode
+                                    if _G.hitboxExpand then
+                                        remote:FireServer(plr.Character)
+                                        remote:FireServer(plr.Character.HumanoidRootPart.Position)
+                                    end
                                 end)
                                 attempts = attempts + 1
                             end
@@ -503,7 +512,7 @@ CombatTab:CreateToggle({
         if Value then
             Rayfield:Notify({
                 Title = "Auto Slap Enabled",
-                Content = "Automatically slaps nearest players. Adapts to your current glove type.",
+                Content = "Automatically slaps nearest players. Works better with Hitbox Expand.",
                 Duration = 3,
             })
         end
@@ -519,7 +528,7 @@ CombatTab:CreateToggle({
         if Value then
             Rayfield:Notify({
                 Title = "Kill Aura Enabled",
-                Content = "Attacks multiple players in range. Works best with fast gloves.",
+                Content = "Attacks multiple players in range. Enable Hitbox Expand for better hits.",
                 Duration = 3,
             })
         end
@@ -586,6 +595,48 @@ CombatTab:CreateSlider({
     Flag = "MaxSlapRate",
     Callback = function(Value)
         _G.maxSlapRate = Value
+    end,
+})
+
+CombatTab:CreateToggle({
+    Name = "Hitbox Expand",
+    CurrentValue = false,
+    Flag = "HitboxExpand",
+    Callback = function(Value)
+        _G.hitboxExpand = Value
+        if Value then
+            Rayfield:Notify({
+                Title = "Hitbox Expand Enabled",
+                Content = "Expands your glove hitbox for easier hits. Includes anti-cheat bypass.",
+                Duration = 3,
+            })
+        else
+            resetHitbox()
+        end
+    end,
+})
+
+CombatTab:CreateSlider({
+    Name = "Hitbox Size",
+    Range = {5, 50},
+    Increment = 1,
+    Suffix = " studs",
+    CurrentValue = 10,
+    Flag = "HitboxSize",
+    Callback = function(Value)
+        _G.hitboxSize = Value
+    end,
+})
+
+CombatTab:CreateSlider({
+    Name = "Hitbox Transparency",
+    Range = {0.1, 1.0},
+    Increment = 0.1,
+    Suffix = "",
+    CurrentValue = 0.7,
+    Flag = "HitboxTransparency",
+    Callback = function(Value)
+        _G.hitboxTransparency = Value
     end,
 })
 
@@ -754,18 +805,16 @@ DebugTab:CreateLabel("Anti-Cheat Status")
 
 DebugTab:CreateParagraph({Title = "Bypass Info", Content = "Humanized slapping uses random delays and patterns to avoid detection. Lower cooldown = higher risk. Max 2 slaps/second recommended."})
 
-DebugTab:CreateParagraph({Title = "Glove Support", Content = "Script automatically adapts to your equipped glove. Extended gloves use longer range, heavy gloves use different timing, teleport gloves use special activation."})
+DebugTab:CreateParagraph({Title = "Hitbox System", Content = "Hitbox Expand makes your glove bigger for easier hits. Includes gradual size changes and transparency randomization to avoid detection."})
 
 DebugTab:CreateButton({
-    Name = "Check Current Glove",
+    Name = "Reset Hitbox",
     Callback = function()
-        local currentGlove = getCurrentGlove()
-        local config = getGloveConfig(currentGlove)
-        
+        resetHitbox()
         Rayfield:Notify({
-            Title = "Current Glove: " .. currentGlove,
-            Content = "Range: " .. config.range .. " | Type: " .. config.hitbox .. " | Method: " .. config.method,
-            Duration = 5,
+            Title = "Hitbox Reset",
+            Content = "All hitbox modifications have been reset to original values.",
+            Duration = 3,
         })
     end,
 })
@@ -787,6 +836,7 @@ RunService.Heartbeat:Connect(function()
     
     if loopCount % 10 == 0 then
         if _G.reachExtend then reachExtend() end
+        if _G.hitboxExpand then expandHitbox() end
     end
 end)
 
