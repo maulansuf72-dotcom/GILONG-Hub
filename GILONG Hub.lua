@@ -27,11 +27,11 @@ local Window = Rayfield:CreateWindow({
    KeySettings = {
       Title = "GILONG Hub | Blue Lock Rivals",
       Subtitle = "Enter Access Key",
-      Note = "Get your key from: https://link-hub.net/1392772/BlueLockKey",
+      Note = "https://link-hub.net/1392772/AfVHcFNYkLMx",
       FileName = "GILONGHub_BlueLock",
       SaveKey = true,
       GrabKeyFromSite = true,
-      Key = {"BlueLockChampion2024!", "SoccerKing123", "GoalMaster456"}
+      Key = {"AyamGoreng!"}
    }
 })
 
@@ -102,28 +102,50 @@ local function getDistance(part1, part2)
 end
 
 local function getBall()
-    -- Multiple ways to find the ball in Blue Lock Rivals
     local ball = nil
     
-    -- Method 1: Check for common ball names
-    for _, obj in pairs(Workspace:GetDescendants()) do
-        if obj:IsA("BasePart") and (
-            obj.Name:lower():find("ball") or
-            obj.Name:lower():find("football") or
-            obj.Name:lower():find("soccer")
-        ) then
-            if obj.Size.Magnitude > 1 and obj.Size.Magnitude < 10 then
+    -- Method 1: Check specific Blue Lock Rivals ball locations
+    local possiblePaths = {
+        Workspace:FindFirstChild("Ball"),
+        Workspace:FindFirstChild("Football"),
+        Workspace:FindFirstChild("SoccerBall")
+    }
+    
+    for _, path in pairs(possiblePaths) do
+        if path and path:IsA("BasePart") then
+            ball = path
+            break
+        end
+    end
+    
+    -- Method 2: Search in game-specific folders
+    local gameFolder = Workspace:FindFirstChild("Game") or Workspace:FindFirstChild("Match")
+    if gameFolder and not ball then
+        for _, obj in pairs(gameFolder:GetDescendants()) do
+            if obj:IsA("BasePart") and (
+                obj.Name:lower():find("ball") or
+                obj.Name:lower():find("football") or
+                obj.Name == "Ball" or obj.Name == "Football"
+            ) then
                 ball = obj
                 break
             end
         end
     end
     
-    -- Method 2: Check for moving spherical objects
+    -- Method 3: Check for spherical objects with specific properties
     if not ball then
         for _, obj in pairs(Workspace:GetDescendants()) do
-            if obj:IsA("BasePart") and obj.Shape == Enum.PartType.Ball then
-                if obj.Size.X > 1 and obj.Size.X < 5 then
+            if obj:IsA("BasePart") then
+                local name = obj.Name:lower()
+                local isSpherical = obj.Shape == Enum.PartType.Ball or 
+                                  (obj.Size.X == obj.Size.Y and obj.Size.Y == obj.Size.Z)
+                local rightSize = obj.Size.X > 1 and obj.Size.X < 8
+                local hasPhysics = obj.AssemblyLinearVelocity.Magnitude > 0 or 
+                                 obj:FindFirstChild("BodyVelocity") or
+                                 obj:FindFirstChild("BodyPosition")
+                
+                if (name:find("ball") or name:find("football") or isSpherical) and rightSize then
                     ball = obj
                     break
                 end
@@ -131,13 +153,15 @@ local function getBall()
         end
     end
     
-    -- Method 3: Check Workspace.Ball or similar folders
-    local ballFolder = Workspace:FindFirstChild("Ball") or Workspace:FindFirstChild("Balls")
-    if ballFolder and not ball then
-        for _, obj in pairs(ballFolder:GetChildren()) do
-            if obj:IsA("BasePart") then
-                ball = obj
-                break
+    -- Method 4: Fallback - find any moving spherical object
+    if not ball then
+        for _, obj in pairs(Workspace:GetDescendants()) do
+            if obj:IsA("BasePart") and obj.AssemblyLinearVelocity.Magnitude > 5 then
+                local size = obj.Size.Magnitude
+                if size > 2 and size < 12 and obj.Shape == Enum.PartType.Ball then
+                    ball = obj
+                    break
+                end
             end
         end
     end
@@ -183,17 +207,29 @@ local function ballMagnet()
     if distance <= _G.ballMagnetRange then
         safeCall(function()
             local direction = (character.HumanoidRootPart.Position - ball.Position).Unit
-            local targetPos = character.HumanoidRootPart.Position + (direction * 3)
+            local magnetForce = 25
             
+            -- Try multiple methods to move ball
             if ball:FindFirstChild("BodyVelocity") then
-                ball.BodyVelocity.Velocity = direction * 20
+                ball.BodyVelocity.Velocity = direction * magnetForce
+            elseif ball:FindFirstChild("BodyPosition") then
+                ball.BodyPosition.Position = character.HumanoidRootPart.Position + (direction * 4)
             else
+                -- Create temporary BodyVelocity
                 local bodyVel = Instance.new("BodyVelocity")
-                bodyVel.MaxForce = Vector3.new(4000, 4000, 4000)
-                bodyVel.Velocity = direction * 20
+                bodyVel.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+                bodyVel.Velocity = direction * magnetForce
                 bodyVel.Parent = ball
                 
-                game:GetService("Debris"):AddItem(bodyVel, 0.1)
+                -- Also try AssemblyLinearVelocity
+                ball.AssemblyLinearVelocity = direction * magnetForce
+                
+                game:GetService("Debris"):AddItem(bodyVel, 0.2)
+            end
+            
+            -- Alternative: Direct position manipulation
+            if distance < 5 then
+                ball.CFrame = CFrame.new(character.HumanoidRootPart.Position + (direction * 3))
             end
         end)
     end
@@ -214,24 +250,36 @@ local function autoSteal()
     
     for _, plr in pairs(getPlayers()) do
         local distance = getDistance(ball, plr.Character.HumanoidRootPart)
-        if distance < 10 and distance < closestDistance then
+        if distance < 15 and distance < closestDistance then
             closestDistance = distance
             closestPlayer = plr
         end
     end
     
-    if closestPlayer then
+    if closestPlayer or getDistance(ball, character.HumanoidRootPart) < 10 then
         safeCall(function()
-            -- Try to find steal/tackle remotes
+            -- Method 1: Key simulation (E for slide tackle)
+            UserInputService:SendKeyEvent(true, Enum.KeyCode.E, false, game)
+            task.wait(0.1)
+            UserInputService:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+            
+            -- Method 2: Try to find steal/tackle remotes
             for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
-                if remote:IsA("RemoteEvent") and (
-                    remote.Name:lower():find("steal") or
-                    remote.Name:lower():find("tackle") or
-                    remote.Name:lower():find("slide")
-                ) then
-                    remote:FireServer()
+                if remote:IsA("RemoteEvent") then
+                    local name = remote.Name:lower()
+                    if name:find("steal") or name:find("tackle") or name:find("slide") or
+                       name:find("defend") or name == "remote" or name == "re" then
+                        remote:FireServer()
+                        remote:FireServer(true)
+                        remote:FireServer("slide")
+                    end
                 end
             end
+            
+            -- Method 3: Try dribble (Q key) as counter
+            UserInputService:SendKeyEvent(true, Enum.KeyCode.Q, false, game)
+            task.wait(0.05)
+            UserInputService:SendKeyEvent(false, Enum.KeyCode.Q, false, game)
         end)
     end
 end
@@ -341,21 +389,43 @@ local function autoShoot()
     if not ball then return end
     
     local distance = getDistance(ball, character.HumanoidRootPart)
-    if distance <= 8 then
+    if distance <= 12 then
         local goals = getGoals()
         if #goals > 0 then
             safeCall(function()
-                -- Try to find shoot remotes
+                -- Method 1: Key simulation (M1 for shooting)
+                local mouse = player:GetMouse()
+                mouse.Button1Down:Fire()
+                task.wait(0.1)
+                mouse.Button1Up:Fire()
+                
+                -- Method 2: UserInputService simulation
+                UserInputService:SendKeyEvent(true, Enum.KeyCode.ButtonL1, false, game)
+                task.wait(0.1)
+                UserInputService:SendKeyEvent(false, Enum.KeyCode.ButtonL1, false, game)
+                
+                -- Method 3: Try to find shoot remotes
                 for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
-                    if remote:IsA("RemoteEvent") and (
-                        remote.Name:lower():find("shoot") or
-                        remote.Name:lower():find("kick") or
-                        remote.Name:lower():find("shot")
-                    ) then
-                        remote:FireServer()
-                        if _G.powerShot then
-                            remote:FireServer("power")
-                            remote:FireServer(100) -- Max power
+                    if remote:IsA("RemoteEvent") then
+                        local name = remote.Name:lower()
+                        if name:find("shoot") or name:find("kick") or name:find("shot") or
+                           name:find("fire") or name == "remote" or name == "re" then
+                            remote:FireServer()
+                            remote:FireServer(true)
+                            if _G.powerShot then
+                                remote:FireServer("power")
+                                remote:FireServer(100)
+                                remote:FireServer({power = 100})
+                            end
+                        end
+                    end
+                end
+                
+                -- Method 4: Try StarterPlayer and other services
+                for _, service in pairs({game:GetService("StarterPlayer"), game:GetService("StarterGui")}) do
+                    for _, remote in pairs(service:GetDescendants()) do
+                        if remote:IsA("RemoteEvent") and remote.Name:lower():find("shoot") then
+                            remote:FireServer()
                         end
                     end
                 end
@@ -586,21 +656,62 @@ local function setupClickTP()
     end
 end
 
--- Main Loop
-local heartbeatConnection = RunService.Heartbeat:Connect(function()
-    safeCall(ballMagnet)
-    safeCall(autoSteal)
+-- Debug function
+local function debugInfo()
+    local ball = getBall()
+    if ball then
+        print("[DEBUG] Ball found:", ball.Name, "Position:", ball.Position)
+        print("[DEBUG] Ball velocity:", ball.AssemblyLinearVelocity.Magnitude)
+    else
+        print("[DEBUG] No ball detected")
+    end
+    
+    local remoteCount = 0
+    for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
+        if remote:IsA("RemoteEvent") then
+            remoteCount = remoteCount + 1
+        end
+    end
+    print("[DEBUG] Found", remoteCount, "RemoteEvents")
+end
+
+-- Main Loop with improved timing
+local heartbeatConnection
+local frameCount = 0
+heartbeatConnection = RunService.Heartbeat:Connect(function()
+    frameCount = frameCount + 1
+    
+    -- Run every frame
     safeCall(applySpeedBoost)
-    safeCall(infiniteStamina)
     safeCall(flyHack)
-    safeCall(autoShoot)
-    safeCall(perfectAim)
-    safeCall(createBallESP)
-    safeCall(createPlayerESP)
-    safeCall(createGoalESP)
-    safeCall(autoPlay)
     safeCall(noclip)
-    safeCall(antiAFK)
+    
+    -- Run every 2 frames (30 FPS equivalent)
+    if frameCount % 2 == 0 then
+        safeCall(ballMagnet)
+        safeCall(autoShoot)
+        safeCall(autoSteal)
+        safeCall(perfectAim)
+        safeCall(autoPlay)
+    end
+    
+    -- Run every 5 frames (12 FPS equivalent)
+    if frameCount % 5 == 0 then
+        safeCall(infiniteStamina)
+        safeCall(createBallESP)
+        safeCall(createPlayerESP)
+        safeCall(createGoalESP)
+    end
+    
+    -- Run every 60 frames (1 FPS equivalent)
+    if frameCount % 60 == 0 then
+        safeCall(antiAFK)
+    end
+    
+    -- Debug every 300 frames (5 seconds)
+    if frameCount % 300 == 0 and (_G.ballMagnet or _G.autoShoot) then
+        safeCall(debugInfo)
+    end
 end)
 
 -- GUI Elements
@@ -816,6 +927,47 @@ utilityTab:CreateButton({
    Name = "Clear All ESP",
    Callback = function()
        clearESP()
+   end
+})
+
+utilityTab:CreateButton({
+   Name = "Debug Info",
+   Callback = function()
+       debugInfo()
+       
+       -- Print all RemoteEvents
+       print("=== ALL REMOTE EVENTS ===")
+       for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
+           if remote:IsA("RemoteEvent") then
+               print("Remote:", remote.Name, "Path:", remote:GetFullName())
+           end
+       end
+       print("========================")
+   end
+})
+
+utilityTab:CreateButton({
+   Name = "Force Shoot Test",
+   Callback = function()
+       print("[TEST] Testing shoot function...")
+       autoShoot()
+       print("[TEST] Shoot test completed")
+   end
+})
+
+utilityTab:CreateButton({
+   Name = "Find Ball Test",
+   Callback = function()
+       local ball = getBall()
+       if ball then
+           print("[TEST] Ball found:", ball.Name, "at", ball.Position)
+           local character = player.Character
+           if character and character:FindFirstChild("HumanoidRootPart") then
+               character.HumanoidRootPart.CFrame = CFrame.new(ball.Position + Vector3.new(0, 5, 0))
+           end
+       else
+           print("[TEST] No ball found")
+       end
    end
 })
 
