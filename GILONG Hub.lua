@@ -1,22 +1,22 @@
--- Ink Game (Squid Game) - Ultimate Script Hub
--- Created by GILONG Hub | Optimized for All Challenges
+-- Slap Battles - Ultimate Script Hub
+-- Created by GILONG Hub | Optimized for Maximum Slaps
 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
-   Name = "GILONG Hub | Ink Game",
+   Name = "GILONG Hub | Slap Battles",
    Icon = 0,
-   LoadingTitle = "Ink Game Script",
-   LoadingSubtitle = "Squid Game Survival Domination",
+   LoadingTitle = "Slap Battles Script",
+   LoadingSubtitle = "Ultimate Slapping Domination",
    ShowText = "GILONG Hub",
-   Theme = "DarkBlue",
+   Theme = "Amethyst",
    ToggleUIKeybind = Enum.KeyCode.RightControl,
    DisableRayfieldPrompts = false,
    DisableBuildWarnings = false,
    ConfigurationSaving = {
       Enabled = true,
       FolderName = "GILONGHub",
-      FileName = "InkGame_Config"
+      FileName = "SlapBattles_Config"
    },
    Discord = {
       Enabled = false,
@@ -25,21 +25,21 @@ local Window = Rayfield:CreateWindow({
    },
    KeySystem = true,
    KeySettings = {
-      Title = "GILONG Hub | Ink Game",
+      Title = "GILONG Hub | Slap Battles",
       Subtitle = "Enter Access Key",
       Note = "https://link-hub.net/1392772/AfVHcFNYkLMx",
-      FileName = "GILONGHub_InkGame",
+      FileName = "GILONGHub_SlapBattles",
       SaveKey = true,
       GrabKeyFromSite = true,
-      Key = {"SquidGame2024!"}
+      Key = {"SlapKing2025!"}
    }
 })
 
 -- Create Tabs
-local gameTab = Window:CreateTab("🎮 Game Assists", nil)
-local movementTab = Window:CreateTab("🏃‍♂️ Movement", nil)
-local combatTab = Window:CreateTab("⚔️ Combat", nil)
+local combatTab = Window:CreateTab("👊 Combat", nil)
 local farmTab = Window:CreateTab("💰 Farming", nil)
+local movementTab = Window:CreateTab("🏃‍♂️ Movement", nil)
+local visualTab = Window:CreateTab("👁️ Visuals", nil)
 local utilityTab = Window:CreateTab("🔧 Utility", nil)
 
 -- Services
@@ -57,42 +57,43 @@ local player = Players.LocalPlayer
 local mouse = player:GetMouse()
 
 -- Global Variables
-_G.redLightAssist = false
-_G.autoFreeze = false
-_G.dalgonaAssist = false
-_G.autoTrace = false
-_G.tugsWarAssist = false
-_G.autoClick = false
-_G.glassAssist = false
-_G.safePathESP = false
-_G.hideSeekAssist = false
-_G.autoHide = false
+_G.autoSlap = false
+_G.slapRange = 15
+_G.autoTarget = false
+_G.targetMode = "nearest"
+_G.autoFarm = false
+_G.farmSlaps = false
+_G.autoBadge = false
 _G.speedBoost = false
 _G.speedValue = 25
-_G.autoDash = false
-_G.dashTiming = false
-_G.infiniteStamina = false
-_G.noclip = false
 _G.flyHack = false
 _G.flySpeed = 50
-_G.autoFarm = false
-_G.afkFarm = false
+_G.infiniteJump = false
+_G.noclip = false
 _G.playerESP = false
-_G.guardESP = false
+_G.gloveESP = false
+_G.antiRagdoll = false
+_G.antiVoid = false
+_G.autoRespawn = false
+_G.killAura = false
+_G.auraRange = 20
+_G.reachExtend = false
+_G.reachDistance = 25
 _G.antiAFK = false
-_G.autoVote = false
-_G.voteChoice = "rebel"
+_G.autoEquip = false
+_G.selectedGlove = "Default"
 
 -- Storage
 local connections = {}
 local espObjects = {}
 local originalValues = {}
+local targetPlayer = nil
 
 -- Utility Functions
 local function safeCall(func, ...)
     local success, result = pcall(func, ...)
     if not success then
-        warn("[Ink Game] Error: " .. tostring(result))
+        warn("[Slap Battles] Error: " .. tostring(result))
     end
     return success, result
 end
@@ -102,153 +103,189 @@ local function getDistance(part1, part2)
     return (part1.Position - part2.Position).Magnitude
 end
 
--- Game Detection Functions
-local function isRedLightActive()
-    -- Check for red light indicators
-    for _, obj in pairs(Workspace:GetDescendants()) do
-        if obj:IsA("Sound") and obj.Name:lower():find("red") then
-            return obj.IsPlaying
-        elseif obj:IsA("StringValue") and obj.Value:lower():find("red") then
-            return true
-        end
-    end
-    return false
-end
-
-local function getCurrentChallenge()
-    local gui = player:FindFirstChild("PlayerGui")
-    if gui then
-        for _, obj in pairs(gui:GetDescendants()) do
-            if obj:IsA("TextLabel") then
-                local text = obj.Text:lower()
-                if text:find("red light") or text:find("green light") then
-                    return "redlight"
-                elseif text:find("dalgona") or text:find("cookie") then
-                    return "dalgona"
-                elseif text:find("tug") or text:find("war") then
-                    return "tugwar"
-                elseif text:find("glass") or text:find("bridge") then
-                    return "glass"
-                elseif text:find("hide") or text:find("seek") then
-                    return "hideseek"
-                elseif text:find("lights out") then
-                    return "lightsout"
-                end
+local function getClosestPlayer()
+    local character = player.Character
+    if not character or not character:FindFirstChild("HumanoidRootPart") then return nil end
+    
+    local closestPlayer = nil
+    local closestDistance = math.huge
+    
+    for _, plr in pairs(Players:GetPlayers()) do
+        if plr ~= player and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+            local distance = getDistance(character.HumanoidRootPart, plr.Character.HumanoidRootPart)
+            if distance < closestDistance then
+                closestDistance = distance
+                closestPlayer = plr
             end
         end
     end
-    return "unknown"
+    
+    return closestPlayer
 end
 
--- Red Light Green Light Assist
-local function redLightAssist()
-    if not _G.redLightAssist then return end
+local function getGloves()
+    local gloves = {}
+    local character = player.Character
+    if character then
+        for _, obj in pairs(character:GetChildren()) do
+            if obj:IsA("Tool") and obj.Name:lower():find("glove") then
+                table.insert(gloves, obj.Name)
+            end
+        end
+    end
+    
+    -- Also check backpack
+    for _, obj in pairs(player.Backpack:GetChildren()) do
+        if obj:IsA("Tool") and obj.Name:lower():find("glove") then
+            table.insert(gloves, obj.Name)
+        end
+    end
+    
+    return gloves
+end
+
+-- Combat Features
+local function autoSlap()
+    if not _G.autoSlap then return end
     
     local character = player.Character
-    if not character or not character:FindFirstChild("Humanoid") then return end
+    if not character or not character:FindFirstChild("HumanoidRootPart") then return end
     
-    if isRedLightActive() and _G.autoFreeze then
-        character.Humanoid.WalkSpeed = 0
-        character.Humanoid.JumpPower = 0
+    local target = nil
+    if _G.autoTarget then
+        if _G.targetMode == "nearest" then
+            target = getClosestPlayer()
+        elseif targetPlayer and targetPlayer.Character then
+            target = targetPlayer
+        end
     else
-        character.Humanoid.WalkSpeed = _G.speedBoost and _G.speedValue or 16
-        character.Humanoid.JumpPower = 50
+        target = getClosestPlayer()
     end
-end
-
--- Dalgona Cookie Assist
-local function dalgonaAssist()
-    if not _G.dalgonaAssist then return end
     
-    local character = player.Character
-    if not character then return end
-    
-    if getCurrentChallenge() == "dalgona" and _G.autoTrace then
-        safeCall(function()
-            -- Find cookie tracing interface
-            local gui = player.PlayerGui
-            for _, obj in pairs(gui:GetDescendants()) do
-                if obj:IsA("Frame") and obj.Name:lower():find("cookie") then
-                    -- Auto trace cookie outline
-                    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 1)
-                    task.wait(0.1)
-                    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 1)
-                end
-            end
-        end)
-    end
-end
-
--- Tug of War Assist
-local function tugWarAssist()
-    if not _G.tugsWarAssist then return end
-    
-    if getCurrentChallenge() == "tugwar" and _G.autoClick then
-        safeCall(function()
-            -- Auto click for tug of war
-            VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 1)
-            task.wait(0.05)
-            VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 1)
-        end)
-    end
-end
-
--- Glass Bridge Assist
-local function glassAssist()
-    if not _G.glassAssist then return end
-    
-    if getCurrentChallenge() == "glass" then
-        safeCall(function()
-            -- ESP for safe glass panels
-            for _, obj in pairs(Workspace:GetDescendants()) do
-                if obj:IsA("BasePart") and obj.Name:lower():find("glass") then
-                    if not obj:FindFirstChild("GlassESP") then
-                        local highlight = Instance.new("Highlight")
-                        highlight.Name = "GlassESP"
-                        highlight.Parent = obj
-                        
-                        -- Green for safe, red for fake
-                        if obj.Transparency > 0.5 then
-                            highlight.FillColor = Color3.new(1, 0, 0) -- Red for fake
-                        else
-                            highlight.FillColor = Color3.new(0, 1, 0) -- Green for safe
+    if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+        local distance = getDistance(character.HumanoidRootPart, target.Character.HumanoidRootPart)
+        
+        if distance <= _G.slapRange then
+            safeCall(function()
+                -- Method 1: Mouse click simulation
+                VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 1)
+                task.wait(0.05)
+                VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 1)
+                
+                -- Method 2: Try to find slap remotes
+                for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
+                    if remote:IsA("RemoteEvent") then
+                        local name = remote.Name:lower()
+                        if name:find("slap") or name:find("hit") or name:find("attack") or
+                           name == "b" or name == "remote" or name == "re" then
+                            remote:FireServer()
+                            remote:FireServer(target.Character)
+                            remote:FireServer({target = target.Character})
                         end
-                        
-                        highlight.OutlineColor = Color3.new(1, 1, 1)
-                        highlight.FillTransparency = 0.5
-                        table.insert(espObjects, highlight)
                     end
                 end
-            end
-        end)
+                
+                -- Method 3: Tool activation
+                local tool = character:FindFirstChildOfClass("Tool")
+                if tool and tool:FindFirstChild("Handle") then
+                    tool:Activate()
+                end
+            end)
+        end
     end
 end
 
--- Hide and Seek Assist
-local function hideSeekAssist()
-    if not _G.hideSeekAssist then return end
+local function killAura()
+    if not _G.killAura then return end
+    
+    local character = player.Character
+    if not character or not character:FindFirstChild("HumanoidRootPart") then return end
+    
+    for _, plr in pairs(Players:GetPlayers()) do
+        if plr ~= player and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+            local distance = getDistance(character.HumanoidRootPart, plr.Character.HumanoidRootPart)
+            
+            if distance <= _G.auraRange then
+                safeCall(function()
+                    -- Auto slap all players in range
+                    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 1)
+                    task.wait(0.02)
+                    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 1)
+                    
+                    -- Try remotes
+                    for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
+                        if remote:IsA("RemoteEvent") and remote.Name:lower():find("slap") then
+                            remote:FireServer(plr.Character)
+                        end
+                    end
+                end)
+            end
+        end
+    end
+end
+
+local function reachExtend()
+    if not _G.reachExtend then return end
     
     local character = player.Character
     if not character then return end
     
-    if getCurrentChallenge() == "hideseek" and _G.autoHide then
+    local tool = character:FindFirstChildOfClass("Tool")
+    if tool and tool:FindFirstChild("Handle") then
         safeCall(function()
-            -- Find hiding spots
-            local bestHidingSpot = nil
-            local maxDistance = 0
+            local handle = tool.Handle
+            local originalSize = handle.Size
             
+            -- Extend reach by increasing handle size
+            handle.Size = Vector3.new(_G.reachDistance, _G.reachDistance, _G.reachDistance)
+            handle.Transparency = 1
+            
+            -- Reset after short time
+            task.wait(0.1)
+            handle.Size = originalSize
+            handle.Transparency = 0
+        end)
+    end
+end
+
+-- Farming Features
+local function autoFarm()
+    if not _G.autoFarm then return end
+    
+    local character = player.Character
+    if not character or not character:FindFirstChild("HumanoidRootPart") then return end
+    
+    if _G.farmSlaps then
+        -- Find players to farm slaps from
+        local target = getClosestPlayer()
+        if target and target.Character then
+            local distance = getDistance(character.HumanoidRootPart, target.Character.HumanoidRootPart)
+            
+            if distance > 15 then
+                -- Move closer to target
+                character.Humanoid:MoveTo(target.Character.HumanoidRootPart.Position)
+            else
+                -- Slap target
+                autoSlap()
+            end
+        end
+    end
+    
+    -- Auto collect items/badges
+    if _G.autoBadge then
+        safeCall(function()
             for _, obj in pairs(Workspace:GetDescendants()) do
-                if obj:IsA("BasePart") and obj.Size.Y > 5 and obj.CanCollide then
+                if obj:IsA("BasePart") and (
+                    obj.Name:lower():find("badge") or
+                    obj.Name:lower():find("orb") or
+                    obj.Name:lower():find("collect")
+                ) then
                     local distance = getDistance(obj, character.HumanoidRootPart)
-                    if distance > maxDistance and distance < 100 then
-                        maxDistance = distance
-                        bestHidingSpot = obj
+                    if distance < 50 then
+                        character.HumanoidRootPart.CFrame = CFrame.new(obj.Position)
+                        task.wait(0.1)
                     end
                 end
-            end
-            
-            if bestHidingSpot then
-                character.Humanoid:MoveTo(bestHidingSpot.Position + Vector3.new(0, 0, 5))
             end
         end)
     end
@@ -269,98 +306,69 @@ local function applySpeedBoost()
     end
 end
 
-local function autoDash()
-    if not _G.autoDash then return end
+local function flyHack()
+    local character = player.Character
+    if not character or not character:FindFirstChild("HumanoidRootPart") then return end
+    
+    local hrp = character.HumanoidRootPart
+    
+    if _G.flyHack then
+        if not hrp:FindFirstChild("FlyBodyVelocity") then
+            local bodyVel = Instance.new("BodyVelocity")
+            bodyVel.Name = "FlyBodyVelocity"
+            bodyVel.MaxForce = Vector3.new(4000, 4000, 4000)
+            bodyVel.Velocity = Vector3.new(0, 0, 0)
+            bodyVel.Parent = hrp
+        end
+        
+        local bodyVel = hrp:FindFirstChild("FlyBodyVelocity")
+        if bodyVel then
+            local moveVector = Vector3.new(0, 0, 0)
+            
+            if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+                moveVector = moveVector + (Workspace.CurrentCamera.CFrame.LookVector * _G.flySpeed)
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+                moveVector = moveVector - (Workspace.CurrentCamera.CFrame.LookVector * _G.flySpeed)
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+                moveVector = moveVector - (Workspace.CurrentCamera.CFrame.RightVector * _G.flySpeed)
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+                moveVector = moveVector + (Workspace.CurrentCamera.CFrame.RightVector * _G.flySpeed)
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+                moveVector = moveVector + Vector3.new(0, _G.flySpeed, 0)
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
+                moveVector = moveVector - Vector3.new(0, _G.flySpeed, 0)
+            end
+            
+            bodyVel.Velocity = moveVector
+        end
+    else
+        if hrp:FindFirstChild("FlyBodyVelocity") then
+            hrp.FlyBodyVelocity:Destroy()
+        end
+    end
+end
+
+local function infiniteJump()
+    if not _G.infiniteJump then return end
     
     local character = player.Character
     if not character then return end
     
-    if _G.dashTiming then
-        local challenge = getCurrentChallenge()
-        if challenge == "redlight" and isRedLightActive() then
-            -- Don't dash during red light
-            return
-        elseif challenge == "glass" then
-            -- Smart dash on glass bridge
-            VirtualInputManager:SendKeyEvent(Enum.KeyCode.Q, true, game)
-            task.wait(0.1)
-            VirtualInputManager:SendKeyEvent(Enum.KeyCode.Q, false, game)
+    local humanoid = character:FindFirstChild("Humanoid")
+    if humanoid then
+        humanoid.JumpHeight = 50
+        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+            humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
         end
     end
 end
 
--- Combat Features (Lights Out)
-local function combatAssist()
-    if getCurrentChallenge() == "lightsout" then
-        safeCall(function()
-            -- Find nearest enemy
-            local character = player.Character
-            if not character then return end
-            
-            local nearestEnemy = nil
-            local nearestDistance = math.huge
-            
-            for _, plr in pairs(Players:GetPlayers()) do
-                if plr ~= player and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
-                    local distance = getDistance(character.HumanoidRootPart, plr.Character.HumanoidRootPart)
-                    if distance < nearestDistance then
-                        nearestDistance = distance
-                        nearestEnemy = plr
-                    end
-                end
-            end
-            
-            if nearestEnemy and nearestDistance < 20 then
-                -- Auto attack
-                VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 1)
-                task.wait(0.1)
-                VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 1)
-            end
-        end)
-    end
-end
-
--- Farming Features
-local function autoFarm()
-    if not _G.autoFarm then return end
-    
-    safeCall(function()
-        -- Auto collect Won and items
-        for _, obj in pairs(Workspace:GetDescendants()) do
-            if obj:IsA("BasePart") and (
-                obj.Name:lower():find("won") or
-                obj.Name:lower():find("coin") or
-                obj.Name:lower():find("money")
-            ) then
-                local character = player.Character
-                if character and character:FindFirstChild("HumanoidRootPart") then
-                    local distance = getDistance(obj, character.HumanoidRootPart)
-                    if distance < 50 then
-                        character.HumanoidRootPart.CFrame = CFrame.new(obj.Position)
-                        task.wait(0.1)
-                    end
-                end
-            end
-        end
-    end)
-end
-
-local function afkFarm()
-    if not _G.afkFarm then return end
-    
-    safeCall(function()
-        -- Navigate to AFK World
-        local gui = player.PlayerGui
-        for _, obj in pairs(gui:GetDescendants()) do
-            if obj:IsA("TextButton") and obj.Text:lower():find("afk") then
-                obj.MouseButton1Click:Fire()
-                break
-            end
-        end
-    end)
-end
-
--- ESP Features
+-- Visual Features
 local function createPlayerESP()
     if not _G.playerESP then return end
     
@@ -370,9 +378,44 @@ local function createPlayerESP()
                 local highlight = Instance.new("Highlight")
                 highlight.Name = "PlayerESP"
                 highlight.Parent = plr.Character
-                highlight.FillColor = Color3.new(0, 0.5, 1)
+                highlight.FillColor = Color3.new(1, 0, 0)
                 highlight.OutlineColor = Color3.new(1, 1, 1)
                 highlight.FillTransparency = 0.7
+                table.insert(espObjects, highlight)
+                
+                local gui = Instance.new("BillboardGui")
+                gui.Name = "PlayerName"
+                gui.Parent = plr.Character.HumanoidRootPart
+                gui.Size = UDim2.new(0, 200, 0, 50)
+                gui.StudsOffset = Vector3.new(0, 3, 0)
+                
+                local label = Instance.new("TextLabel")
+                label.Parent = gui
+                label.Size = UDim2.new(1, 0, 1, 0)
+                label.BackgroundTransparency = 1
+                label.Text = plr.Name
+                label.TextColor3 = Color3.new(1, 1, 1)
+                label.TextScaled = true
+                label.Font = Enum.Font.SourceSansBold
+                
+                table.insert(espObjects, gui)
+            end)
+        end
+    end
+end
+
+local function createGloveESP()
+    if not _G.gloveESP then return end
+    
+    for _, obj in pairs(Workspace:GetDescendants()) do
+        if obj:IsA("Tool") and obj.Name:lower():find("glove") and not obj:FindFirstChild("GloveESP") then
+            safeCall(function()
+                local highlight = Instance.new("Highlight")
+                highlight.Name = "GloveESP"
+                highlight.Parent = obj
+                highlight.FillColor = Color3.new(0, 1, 0)
+                highlight.OutlineColor = Color3.new(1, 1, 1)
+                highlight.FillTransparency = 0.5
                 table.insert(espObjects, highlight)
             end)
         end
@@ -380,6 +423,32 @@ local function createPlayerESP()
 end
 
 -- Utility Features
+local function antiRagdoll()
+    if not _G.antiRagdoll then return end
+    
+    local character = player.Character
+    if not character then return end
+    
+    safeCall(function()
+        for _, obj in pairs(character:GetDescendants()) do
+            if obj:IsA("BallSocketConstraint") or obj:IsA("HingeConstraint") then
+                obj:Destroy()
+            end
+        end
+    end)
+end
+
+local function antiVoid()
+    if not _G.antiVoid then return end
+    
+    local character = player.Character
+    if not character or not character:FindFirstChild("HumanoidRootPart") then return end
+    
+    if character.HumanoidRootPart.Position.Y < -100 then
+        character.HumanoidRootPart.CFrame = CFrame.new(0, 50, 0)
+    end
+end
+
 local function noclip()
     local character = player.Character
     if not character then return end
@@ -400,77 +469,164 @@ local function antiAFK()
     end)
 end
 
+local function autoEquip()
+    if not _G.autoEquip then return end
+    
+    local character = player.Character
+    if not character then return end
+    
+    for _, tool in pairs(player.Backpack:GetChildren()) do
+        if tool:IsA("Tool") and tool.Name == _G.selectedGlove then
+            character.Humanoid:EquipTool(tool)
+            break
+        end
+    end
+end
+
+-- Clear ESP Function
+local function clearESP()
+    for _, obj in pairs(espObjects) do
+        safeCall(function()
+            if obj and obj.Parent then
+                obj:Destroy()
+            end
+        end)
+    end
+    espObjects = {}
+    
+    -- Also clear existing ESP objects
+    for _, obj in pairs(Workspace:GetDescendants()) do
+        if obj.Name == "PlayerESP" or obj.Name == "GloveESP" or obj.Name == "PlayerName" then
+            safeCall(function()
+                obj:Destroy()
+            end)
+        end
+    end
+end
+
 -- Main Loop
 local heartbeatConnection
+local frameCount = 0
 heartbeatConnection = RunService.Heartbeat:Connect(function()
-    safeCall(redLightAssist)
-    safeCall(dalgonaAssist)
-    safeCall(tugWarAssist)
-    safeCall(glassAssist)
-    safeCall(hideSeekAssist)
+    frameCount = frameCount + 1
+    
+    -- Run every frame
     safeCall(applySpeedBoost)
-    safeCall(autoDash)
-    safeCall(combatAssist)
-    safeCall(autoFarm)
-    safeCall(createPlayerESP)
+    safeCall(flyHack)
+    safeCall(infiniteJump)
     safeCall(noclip)
-    safeCall(antiAFK)
+    safeCall(antiRagdoll)
+    safeCall(antiVoid)
+    
+    -- Run every 2 frames
+    if frameCount % 2 == 0 then
+        safeCall(autoSlap)
+        safeCall(killAura)
+        safeCall(reachExtend)
+        safeCall(autoFarm)
+    end
+    
+    -- Run every 5 frames
+    if frameCount % 5 == 0 then
+        safeCall(createPlayerESP)
+        safeCall(createGloveESP)
+        safeCall(autoEquip)
+    end
+    
+    -- Run every 60 frames
+    if frameCount % 60 == 0 then
+        safeCall(antiAFK)
+    end
 end)
 
 -- GUI Elements
 
--- Game Assists Tab
-gameTab:CreateToggle({
-   Name = "Red Light Green Light Assist",
+-- Combat Tab
+combatTab:CreateToggle({
+   Name = "Auto Slap",
    CurrentValue = false,
-   Flag = "RedLightAssist",
+   Flag = "AutoSlap",
    Callback = function(value)
-       _G.redLightAssist = value
+       _G.autoSlap = value
    end
 })
 
-gameTab:CreateToggle({
-   Name = "Auto Freeze (Red Light)",
-   CurrentValue = false,
-   Flag = "AutoFreeze",
+combatTab:CreateSlider({
+   Name = "Slap Range",
+   Range = {5, 50},
+   Increment = 1,
+   CurrentValue = 15,
+   Flag = "SlapRange",
    Callback = function(value)
-       _G.autoFreeze = value
+       _G.slapRange = value
    end
 })
 
-gameTab:CreateToggle({
-   Name = "Dalgona Cookie Assist",
+combatTab:CreateToggle({
+   Name = "Kill Aura",
    CurrentValue = false,
-   Flag = "DalgonaAssist",
+   Flag = "KillAura",
    Callback = function(value)
-       _G.dalgonaAssist = value
+       _G.killAura = value
    end
 })
 
-gameTab:CreateToggle({
-   Name = "Tug of War Assist",
-   CurrentValue = false,
-   Flag = "TugWarAssist",
+combatTab:CreateSlider({
+   Name = "Aura Range",
+   Range = {10, 50},
+   Increment = 1,
+   CurrentValue = 20,
+   Flag = "AuraRange",
    Callback = function(value)
-       _G.tugsWarAssist = value
+       _G.auraRange = value
    end
 })
 
-gameTab:CreateToggle({
-   Name = "Glass Bridge ESP",
+combatTab:CreateToggle({
+   Name = "Reach Extend",
    CurrentValue = false,
-   Flag = "GlassAssist",
+   Flag = "ReachExtend",
    Callback = function(value)
-       _G.glassAssist = value
+       _G.reachExtend = value
    end
 })
 
-gameTab:CreateToggle({
-   Name = "Hide & Seek Assist",
-   CurrentValue = false,
-   Flag = "HideSeekAssist",
+combatTab:CreateSlider({
+   Name = "Reach Distance",
+   Range = {15, 100},
+   Increment = 1,
+   CurrentValue = 25,
+   Flag = "ReachDistance",
    Callback = function(value)
-       _G.hideSeekAssist = value
+       _G.reachDistance = value
+   end
+})
+
+-- Farming Tab
+farmTab:CreateToggle({
+   Name = "Auto Farm",
+   CurrentValue = false,
+   Flag = "AutoFarm",
+   Callback = function(value)
+       _G.autoFarm = value
+   end
+})
+
+farmTab:CreateToggle({
+   Name = "Farm Slaps",
+   CurrentValue = false,
+   Flag = "FarmSlaps",
+   Callback = function(value)
+       _G.farmSlaps = value
+   end
+})
+
+farmTab:CreateToggle({
+   Name = "Auto Badge Collect",
+   CurrentValue = false,
+   Flag = "AutoBadge",
+   Callback = function(value)
+       _G.autoBadge = value
    end
 })
 
@@ -496,50 +652,73 @@ movementTab:CreateSlider({
 })
 
 movementTab:CreateToggle({
-   Name = "Auto Dash",
+   Name = "Fly Hack",
    CurrentValue = false,
-   Flag = "AutoDash",
+   Flag = "FlyHack",
    Callback = function(value)
-       _G.autoDash = value
+       _G.flyHack = value
+   end
+})
+
+movementTab:CreateSlider({
+   Name = "Fly Speed",
+   Range = {10, 100},
+   Increment = 1,
+   CurrentValue = 50,
+   Flag = "FlySpeed",
+   Callback = function(value)
+       _G.flySpeed = value
    end
 })
 
 movementTab:CreateToggle({
-   Name = "Smart Dash Timing",
+   Name = "Infinite Jump",
    CurrentValue = false,
-   Flag = "DashTiming",
+   Flag = "InfiniteJump",
    Callback = function(value)
-       _G.dashTiming = value
+       _G.infiniteJump = value
    end
 })
 
--- Farming Tab
-farmTab:CreateToggle({
-   Name = "Auto Farm Won",
-   CurrentValue = false,
-   Flag = "AutoFarm",
-   Callback = function(value)
-       _G.autoFarm = value
-   end
-})
-
-farmTab:CreateButton({
-   Name = "Go to AFK World",
-   Callback = function()
-       afkFarm()
-   end
-})
-
-farmTab:CreateToggle({
+-- Visual Tab
+visualTab:CreateToggle({
    Name = "Player ESP",
    CurrentValue = false,
    Flag = "PlayerESP",
    Callback = function(value)
        _G.playerESP = value
+       if not value then clearESP() end
+   end
+})
+
+visualTab:CreateToggle({
+   Name = "Glove ESP",
+   CurrentValue = false,
+   Flag = "GloveESP",
+   Callback = function(value)
+       _G.gloveESP = value
    end
 })
 
 -- Utility Tab
+utilityTab:CreateToggle({
+   Name = "Anti Ragdoll",
+   CurrentValue = false,
+   Flag = "AntiRagdoll",
+   Callback = function(value)
+       _G.antiRagdoll = value
+   end
+})
+
+utilityTab:CreateToggle({
+   Name = "Anti Void",
+   CurrentValue = false,
+   Flag = "AntiVoid",
+   Callback = function(value)
+       _G.antiVoid = value
+   end
+})
+
 utilityTab:CreateToggle({
    Name = "Noclip",
    CurrentValue = false,
@@ -559,33 +738,50 @@ utilityTab:CreateToggle({
 })
 
 utilityTab:CreateButton({
-   Name = "Clear ESP",
+   Name = "Clear All ESP",
    Callback = function()
-       for _, obj in pairs(espObjects) do
-           if obj and obj.Parent then
-               obj:Destroy()
-           end
-       end
-       espObjects = {}
+       clearESP()
    end
 })
+
+utilityTab:CreateButton({
+   Name = "Respawn",
+   Callback = function()
+       player.Character.Humanoid.Health = 0
+   end
+})
+
+-- Cleanup
+Players.PlayerRemoving:Connect(function(plr)
+    if plr == player then
+        clearESP()
+        if heartbeatConnection then
+            heartbeatConnection:Disconnect()
+        end
+        for _, connection in pairs(connections) do
+            if connection then
+                connection:Disconnect()
+            end
+        end
+    end
+end)
 
 -- Notification
 Rayfield:Notify({
    Title = "GILONG Hub Loaded!",
-   Content = "Ink Game Script Ready! 🦑🎮",
+   Content = "Slap Battles Script Ready! 👊💥",
    Duration = 5,
    Image = 4483362458,
    Actions = {
       Ignore = {
-         Name = "Survive & Win!",
+         Name = "Let's Slap!",
          Callback = function()
-            print("Ink Game Script Loaded Successfully!")
+            print("Slap Battles Script Loaded Successfully!")
          end
       },
    },
 })
 
-print("🦑 GILONG Hub - Ink Game Script Loaded!")
-print("🎮 Features: Challenge Assists, Auto Farm, ESP & More!")
-print("🏆 Survive all challenges and dominate the game!")
+print("👊 GILONG Hub - Slap Battles Script Loaded!")
+print("💥 Features: Auto Slap, Kill Aura, Farming, ESP & More!")
+print("🏆 Dominate the arena and collect all gloves!")
