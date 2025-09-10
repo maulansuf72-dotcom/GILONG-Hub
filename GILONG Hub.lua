@@ -73,8 +73,8 @@ _G.reachDistance = 25
 _G.hitboxExpand = false
 _G.hitboxSize = 10
 _G.hitboxTransparency = 0.7
-_G.reachHack = false
-_G.reachSize = 20
+_G.esp = false
+_G.teleportToPlayers = false
 _G.showHP = false
 _G.lowHPAlert = false
 _G.lowHPThreshold = 20
@@ -276,21 +276,53 @@ local function updateHP()
     end
 end
 
--- Simple Working Hitbox System
-local function expandGlove()
-    local character = player.Character
-    if not character then return end
+-- ESP System (Player Highlighting)
+local espBoxes = {}
+
+local function createESP()
+    if not _G.esp then return end
     
-    local tool = character:FindFirstChildOfClass("Tool")
-    if not tool or not tool:FindFirstChild("Handle") then return end
-    
-    local handle = tool.Handle
-    
-    -- Simple size expansion
-    handle.Size = Vector3.new(50, 50, 50)
-    handle.Transparency = 0.8
-    handle.CanCollide = false
-    handle.Material = Enum.Material.ForceField
+    for _, plr in pairs(Players:GetPlayers()) do
+        if plr ~= player and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") and not espBoxes[plr] then
+            local character = plr.Character
+            local rootPart = character.HumanoidRootPart
+            
+            -- Create ESP box
+            local box = Instance.new("SelectionBox")
+            box.Adornee = character
+            box.Color3 = Color3.new(1, 0, 0) -- Red color
+            box.Transparency = 0.3
+            box.LineThickness = 0.1
+            box.Parent = rootPart
+            
+            -- Create name label
+            local billboard = Instance.new("BillboardGui")
+            billboard.Size = UDim2.new(0, 200, 0, 50)
+            billboard.StudsOffset = Vector3.new(0, 3, 0)
+            billboard.Parent = rootPart
+            
+            local nameLabel = Instance.new("TextLabel")
+            nameLabel.Size = UDim2.new(1, 0, 1, 0)
+            nameLabel.BackgroundTransparency = 1
+            nameLabel.Text = plr.Name
+            nameLabel.TextColor3 = Color3.new(1, 1, 1)
+            nameLabel.TextScaled = true
+            nameLabel.Font = Enum.Font.GothamBold
+            nameLabel.TextStrokeTransparency = 0
+            nameLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
+            nameLabel.Parent = billboard
+            
+            espBoxes[plr] = {box = box, billboard = billboard}
+        end
+    end
+end
+
+local function removeESP()
+    for plr, esp in pairs(espBoxes) do
+        if esp.box then esp.box:Destroy() end
+        if esp.billboard then esp.billboard:Destroy() end
+        espBoxes[plr] = nil
+    end
 end
 
 local function basicHit(target)
@@ -329,7 +361,7 @@ local function autoSlap()
     
     if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
         local distance = getDistance(character.HumanoidRootPart, target.Character.HumanoidRootPart)
-        local effectiveRange = _G.reachHack and (_G.slapRange + _G.reachSize) or _G.slapRange
+        local effectiveRange = _G.slapRange
         
         if distance <= effectiveRange then
             if _G.humanizedSlap then
@@ -350,7 +382,7 @@ local function killAura()
     
     local targetsHit = 0
     local maxTargets = _G.reachHack and 4 or 2
-    local effectiveRange = _G.reachHack and (_G.auraRange + _G.reachSize) or _G.auraRange
+    local effectiveRange = _G.auraRange
     
     for _, plr in pairs(Players:GetPlayers()) do
         if targetsHit >= maxTargets then break end
@@ -476,7 +508,7 @@ CombatTab:CreateToggle({
         if Value then
             Rayfield:Notify({
                 Title = "Auto Slap Enabled",
-                Content = "Automatically slaps nearest players. Enable Hitbox Expander for better range!",
+                Content = "Automatically slaps nearest players. Use ESP to see all players!",
                 Duration = 3,
             })
         end
@@ -492,7 +524,7 @@ CombatTab:CreateToggle({
         if Value then
             Rayfield:Notify({
                 Title = "Kill Aura Enabled",
-                Content = "Attacks multiple players in range. Use with Hitbox Expander!",
+                Content = "Attacks multiple players in range. Use ESP to locate targets!",
                 Duration = 3,
             })
         end
@@ -563,32 +595,35 @@ CombatTab:CreateSlider({
 })
 
 CombatTab:CreateToggle({
-    Name = "Hitbox Expander",
+    Name = "ESP (Player Highlight)",
     CurrentValue = false,
-    Flag = "ReachHack",
+    Flag = "ESP",
     Callback = function(Value)
-        _G.reachHack = Value
+        _G.esp = Value
         if Value then
             Rayfield:Notify({
-                Title = "Hitbox Expander Enabled",
-                Content = "Simple hitbox expansion active!",
+                Title = "ESP Enabled",
+                Content = "Players are now highlighted with red boxes and names!",
                 Duration = 3,
             })
+        else
+            removeESP()
         end
     end,
 })
 
-CombatTab:CreateSlider({
-    Name = "Hitbox Size",
-    Range = {10, 100},
-    Increment = 5,
-    Suffix = " studs",
-    CurrentValue = 25,
-    Flag = "ReachSize",
+CombatTab:CreateToggle({
+    Name = "Teleport to Players",
+    CurrentValue = false,
+    Flag = "TeleportToPlayers",
     Callback = function(Value)
-        _G.reachSize = Value
-        if _G.reachHack then
-            createHitbox()
+        _G.teleportToPlayers = Value
+        if Value then
+            Rayfield:Notify({
+                Title = "Teleport Mode Enabled",
+                Content = "Click on players to teleport to them!",
+                Duration = 3,
+            })
         end
     end,
 })
@@ -758,26 +793,41 @@ DebugTab:CreateLabel("Anti-Cheat Status")
 
 DebugTab:CreateParagraph({Title = "Bypass Info", Content = "Humanized slapping uses random delays and patterns to avoid detection. Lower cooldown = higher risk. Max 2 slaps/second recommended."})
 
-DebugTab:CreateParagraph({Title = "Reach System", Content = "Reach Hack extends your tool's reach by making it bigger and adding invisible parts. More reliable than hitbox expansion."})
+DebugTab:CreateParagraph({Title = "ESP System", Content = "ESP highlights all players with red boxes and shows their names. Teleport feature allows you to click on players to teleport to them instantly."})
 
 DebugTab:CreateButton({
-    Name = "Test Hit",
+    Name = "Teleport to Closest Player",
     Callback = function()
         local target = getClosestPlayer()
-        if target then
-            basicHit(target)
-            Rayfield:Notify({
-                Title = "Hit Test",
-                Content = "Testing hit on " .. target.Name,
-                Duration = 2,
-            })
+        if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+            local character = player.Character
+            if character and character:FindFirstChild("HumanoidRootPart") then
+                character.HumanoidRootPart.CFrame = target.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, -5)
+                Rayfield:Notify({
+                    Title = "Teleported",
+                    Content = "Teleported to " .. target.Name,
+                    Duration = 2,
+                })
+            end
         else
             Rayfield:Notify({
-                Title = "Hit Test",
+                Title = "Teleport Failed",
                 Content = "No players nearby",
                 Duration = 2,
             })
         end
+    end,
+})
+
+DebugTab:CreateButton({
+    Name = "Clear ESP",
+    Callback = function()
+        removeESP()
+        Rayfield:Notify({
+            Title = "ESP Cleared",
+            Content = "All ESP boxes removed",
+            Duration = 2,
+        })
     end,
 })
 
@@ -884,8 +934,8 @@ RunService.Heartbeat:Connect(function()
     
     if loopCount % 5 == 0 then
         if _G.reachExtend then reachExtend() end
-        if _G.reachHack and loopCount % 30 == 0 then
-            expandGlove()
+        if _G.esp and loopCount % 60 == 0 then
+            createESP()
         end
     end
 end)
