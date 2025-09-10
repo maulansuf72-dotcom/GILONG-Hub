@@ -70,6 +70,8 @@ _G.reachDistance = 25
 _G.hitboxExpand = false
 _G.hitboxSize = 10
 _G.hitboxTransparency = 0.7
+_G.reachHack = false
+_G.reachSize = 20
 
 -- Anti-Cheat Bypass Variables
 _G.humanizedSlap = true
@@ -188,65 +190,11 @@ local function shouldBypassDetection()
     return false
 end
 
--- Hitbox Expansion System
-local hitboxParts = {}
+-- Enhanced Reach System
+local reachParts = {}
 
-local function createInvisibleHitbox()
-    if not _G.hitboxExpand then return end
-    
-    local character = player.Character
-    if not character or not character:FindFirstChild("HumanoidRootPart") then return end
-    
-    -- Clean up existing hitbox parts
-    for _, part in pairs(hitboxParts) do
-        if part and part.Parent then
-            part:Destroy()
-        end
-    end
-    hitboxParts = {}
-    
-    -- Create invisible hitbox parts around player
-    local rootPart = character.HumanoidRootPart
-    local hitboxSize = _G.hitboxSize
-    
-    safeCall(function()
-        -- Create multiple invisible parts for better hit detection
-        local positions = {
-            Vector3.new(hitboxSize/2, 0, 0),    -- Right
-            Vector3.new(-hitboxSize/2, 0, 0),   -- Left
-            Vector3.new(0, 0, hitboxSize/2),    -- Front
-            Vector3.new(0, 0, -hitboxSize/2),   -- Back
-            Vector3.new(0, hitboxSize/2, 0),    -- Up
-            Vector3.new(0, -hitboxSize/2, 0)    -- Down
-        }
-        
-        for i, offset in pairs(positions) do
-            local hitboxPart = Instance.new("Part")
-            hitboxPart.Name = "HitboxExpander_" .. i
-            hitboxPart.Size = Vector3.new(hitboxSize/3, hitboxSize/3, hitboxSize/3)
-            hitboxPart.Material = Enum.Material.ForceField
-            hitboxPart.Transparency = 0.95
-            hitboxPart.CanCollide = false
-            hitboxPart.Anchored = false
-            hitboxPart.TopSurface = Enum.SurfaceType.Smooth
-            hitboxPart.BottomSurface = Enum.SurfaceType.Smooth
-            
-            -- Weld to player
-            local weld = Instance.new("WeldConstraint")
-            weld.Part0 = rootPart
-            weld.Part1 = hitboxPart
-            weld.Parent = hitboxPart
-            
-            hitboxPart.CFrame = rootPart.CFrame * CFrame.new(offset)
-            hitboxPart.Parent = character
-            
-            table.insert(hitboxParts, hitboxPart)
-        end
-    end)
-end
-
-local function expandHitbox()
-    if not _G.hitboxExpand then return end
+local function createReachExtension()
+    if not _G.reachHack then return end
     
     local character = player.Character
     if not character then return end
@@ -255,39 +203,56 @@ local function expandHitbox()
     if tool and tool:FindFirstChild("Handle") then
         local handle = tool.Handle
         
-        -- Store original values if not already stored
+        -- Store original values
         if not originalValues[tool.Name] then
             originalValues[tool.Name] = {
                 size = handle.Size,
                 transparency = handle.Transparency,
-                canCollide = handle.CanCollide
+                canCollide = handle.CanCollide,
+                massless = handle.Massless
             }
         end
         
-        -- Apply hitbox expansion with bypass techniques
         safeCall(function()
-            local targetSize = Vector3.new(_G.hitboxSize, _G.hitboxSize, _G.hitboxSize)
-            handle.Size = targetSize
-            handle.Transparency = _G.hitboxTransparency
+            -- Make handle bigger and invisible
+            handle.Size = Vector3.new(_G.reachSize, _G.reachSize, _G.reachSize)
+            handle.Transparency = 0.9
             handle.CanCollide = false
+            handle.Massless = true
             
-            -- Anti-detection: Randomize transparency slightly
-            if _G.bypassMode then
-                local randomOffset = math.random(-3, 3) / 100
-                handle.Transparency = math.clamp(_G.hitboxTransparency + randomOffset, 0.1, 1)
+            -- Create additional reach parts
+            for i = 1, 4 do
+                local reachPart = Instance.new("Part")
+                reachPart.Name = "ReachExtender_" .. i
+                reachPart.Size = Vector3.new(_G.reachSize/2, _G.reachSize/2, _G.reachSize/2)
+                reachPart.Transparency = 1
+                reachPart.CanCollide = false
+                reachPart.Massless = true
+                reachPart.Material = Enum.Material.ForceField
+                
+                local weld = Instance.new("WeldConstraint")
+                weld.Part0 = handle
+                weld.Part1 = reachPart
+                weld.Parent = reachPart
+                
+                local offset = Vector3.new(
+                    math.random(-_G.reachSize/4, _G.reachSize/4),
+                    math.random(-_G.reachSize/4, _G.reachSize/4),
+                    math.random(-_G.reachSize/4, _G.reachSize/4)
+                )
+                reachPart.CFrame = handle.CFrame * CFrame.new(offset)
+                reachPart.Parent = tool
+                
+                table.insert(reachParts, reachPart)
             end
         end)
     end
-    
-    -- Update invisible hitbox
-    createInvisibleHitbox()
 end
 
-local function resetHitbox()
+local function resetReach()
     local character = player.Character
     if not character then return end
     
-    -- Reset tool hitbox
     local tool = character:FindFirstChildOfClass("Tool")
     if tool and tool:FindFirstChild("Handle") and originalValues[tool.Name] then
         local handle = tool.Handle
@@ -297,16 +262,17 @@ local function resetHitbox()
             handle.Size = original.size
             handle.Transparency = original.transparency
             handle.CanCollide = original.canCollide
+            handle.Massless = original.massless or false
         end)
     end
     
-    -- Clean up invisible hitbox parts
-    for _, part in pairs(hitboxParts) do
+    -- Clean up reach parts
+    for _, part in pairs(reachParts) do
         if part and part.Parent then
             part:Destroy()
         end
     end
-    hitboxParts = {}
+    reachParts = {}
 end
 
 -- Combat Features
@@ -324,7 +290,7 @@ local function autoSlap()
     
     if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
         local distance = getDistance(character.HumanoidRootPart, target.Character.HumanoidRootPart)
-        local effectiveRange = _G.hitboxExpand and (_G.slapRange + _G.hitboxSize) or _G.slapRange
+        local effectiveRange = _G.reachHack and (_G.slapRange + _G.reachSize) or _G.slapRange
         
         if distance <= effectiveRange then
             safeCall(function()
@@ -345,20 +311,17 @@ local function autoSlap()
                     for _, obj in pairs(tool:GetDescendants()) do
                         if obj:IsA("RemoteEvent") and attempts < 2 then
                             pcall(function()
-                                -- Enhanced hit detection for hitbox mode
-                                if _G.hitboxExpand then
-                                    -- Try multiple parameter combinations
+                                if _G.reachHack then
+                                    -- Enhanced parameters for reach mode
                                     obj:FireServer(target.Character.HumanoidRootPart)
                                     obj:FireServer(target.Character)
                                     obj:FireServer(target.Character.HumanoidRootPart.Position)
-                                    obj:FireServer(target.Character.HumanoidRootPart.CFrame)
-                                    obj:FireServer({Target = target.Character})
-                                    obj:FireServer({Hit = target.Character.HumanoidRootPart})
+                                    obj:FireServer(target.Character.HumanoidRootPart.CFrame.Position)
                                     
-                                    -- Try with hitbox parts as hit targets
-                                    for _, hitboxPart in pairs(hitboxParts) do
-                                        if hitboxPart and hitboxPart.Parent then
-                                            obj:FireServer(hitboxPart)
+                                    -- Try with reach parts
+                                    for _, reachPart in pairs(reachParts) do
+                                        if reachPart and reachPart.Parent then
+                                            obj:FireServer(reachPart)
                                         end
                                     end
                                 else
@@ -391,13 +354,10 @@ local function autoSlap()
                            name == "remote" or name:find("glove") or name:find("attack") or
                            (name:len() == 1 and math.random(1, 3) == 1) then
                             pcall(function()
-                                if _G.hitboxExpand then
-                                    -- Enhanced remote calls for hitbox
+                                if _G.reachHack then
                                     remote:FireServer(target.Character.HumanoidRootPart)
                                     remote:FireServer(target.Character)
                                     remote:FireServer(target.Character.HumanoidRootPart.Position)
-                                    remote:FireServer({Target = target.Character})
-                                    remote:FireServer({Hit = target.Character.HumanoidRootPart})
                                 else
                                     remote:FireServer()
                                     if math.random(1, 2) == 1 then
@@ -434,8 +394,8 @@ local function killAura()
     if not character or not character:FindFirstChild("HumanoidRootPart") then return end
     
     local targetsHit = 0
-    local maxTargets = _G.hitboxExpand and 4 or 2
-    local effectiveRange = _G.hitboxExpand and (_G.auraRange + _G.hitboxSize) or _G.auraRange
+    local maxTargets = _G.reachHack and 4 or 2
+    local effectiveRange = _G.reachHack and (_G.auraRange + _G.reachSize) or _G.auraRange
     
     for _, plr in pairs(Players:GetPlayers()) do
         if targetsHit >= maxTargets then break end
@@ -456,10 +416,10 @@ local function killAura()
                         if tool then
                             tool:Activate()
                             
-                            -- Enhanced activation for hitbox mode
-                            if _G.hitboxExpand then
+                            -- Enhanced activation for reach mode
+                            if _G.reachHack then
                                 task.wait(0.02)
-                                tool:Activate() -- Double activation for better hit detection
+                                tool:Activate()
                             end
                         end
                     end
@@ -470,20 +430,10 @@ local function killAura()
                             local name = remote.Name:lower()
                             if name == "b" or name:find("slap") then
                                 pcall(function()
-                                    if _G.hitboxExpand then
-                                        -- Enhanced parameters for hitbox mode
+                                    if _G.reachHack then
                                         remote:FireServer(plr.Character.HumanoidRootPart)
                                         remote:FireServer(plr.Character)
                                         remote:FireServer(plr.Character.HumanoidRootPart.Position)
-                                        remote:FireServer(plr.Character.HumanoidRootPart.CFrame)
-                                        remote:FireServer({Target = plr.Character})
-                                        
-                                        -- Try with hitbox parts
-                                        for _, hitboxPart in pairs(hitboxParts) do
-                                            if hitboxPart and hitboxPart.Parent then
-                                                remote:FireServer(hitboxPart)
-                                            end
-                                        end
                                     else
                                         remote:FireServer()
                                     end
@@ -604,7 +554,7 @@ CombatTab:CreateToggle({
         if Value then
             Rayfield:Notify({
                 Title = "Auto Slap Enabled",
-                Content = "Automatically slaps nearest players. Works better with Hitbox Expand.",
+                Content = "Automatically slaps nearest players. Works better with Reach Hack.",
                 Duration = 3,
             })
         end
@@ -620,7 +570,7 @@ CombatTab:CreateToggle({
         if Value then
             Rayfield:Notify({
                 Title = "Kill Aura Enabled",
-                Content = "Attacks multiple players in range. Enable Hitbox Expand for better hits.",
+                Content = "Attacks multiple players in range. Enable Reach Hack for better hits.",
                 Duration = 3,
             })
         end
@@ -691,45 +641,32 @@ CombatTab:CreateSlider({
 })
 
 CombatTab:CreateToggle({
-    Name = "Hitbox Expand",
+    Name = "Reach Hack",
     CurrentValue = false,
-    Flag = "HitboxExpand",
+    Flag = "ReachHack",
     Callback = function(Value)
-        _G.hitboxExpand = Value
+        _G.reachHack = Value
         if Value then
-            createInvisibleHitbox()
             Rayfield:Notify({
-                Title = "Hitbox Expand Enabled",
-                Content = "Enhanced hitbox system with invisible parts. Better hit detection.",
+                Title = "Reach Hack Enabled",
+                Content = "Extends your reach for easier hits. Works with all gloves.",
                 Duration = 3,
             })
         else
-            resetHitbox()
+            resetReach()
         end
     end,
 })
 
 CombatTab:CreateSlider({
-    Name = "Hitbox Size",
-    Range = {5, 50},
-    Increment = 1,
+    Name = "Reach Size",
+    Range = {10, 100},
+    Increment = 5,
     Suffix = " studs",
-    CurrentValue = 10,
-    Flag = "HitboxSize",
+    CurrentValue = 20,
+    Flag = "ReachSize",
     Callback = function(Value)
-        _G.hitboxSize = Value
-    end,
-})
-
-CombatTab:CreateSlider({
-    Name = "Hitbox Transparency",
-    Range = {0.1, 1.0},
-    Increment = 0.1,
-    Suffix = "",
-    CurrentValue = 0.7,
-    Flag = "HitboxTransparency",
-    Callback = function(Value)
-        _G.hitboxTransparency = Value
+        _G.reachSize = Value
     end,
 })
 
@@ -898,15 +835,15 @@ DebugTab:CreateLabel("Anti-Cheat Status")
 
 DebugTab:CreateParagraph({Title = "Bypass Info", Content = "Humanized slapping uses random delays and patterns to avoid detection. Lower cooldown = higher risk. Max 2 slaps/second recommended."})
 
-DebugTab:CreateParagraph({Title = "Hitbox System", Content = "Hitbox Expand makes your glove bigger for easier hits. Includes gradual size changes and transparency randomization to avoid detection."})
+DebugTab:CreateParagraph({Title = "Reach System", Content = "Reach Hack extends your tool's reach by making it bigger and adding invisible parts. More reliable than hitbox expansion."})
 
 DebugTab:CreateButton({
-    Name = "Reset Hitbox",
+    Name = "Reset Reach",
     Callback = function()
-        resetHitbox()
+        resetReach()
         Rayfield:Notify({
-            Title = "Hitbox Reset",
-            Content = "All hitbox modifications have been reset to original values.",
+            Title = "Reach Reset",
+            Content = "All reach modifications have been reset to original values.",
             Duration = 3,
         })
     end,
@@ -929,7 +866,7 @@ RunService.Heartbeat:Connect(function()
     
     if loopCount % 5 == 0 then
         if _G.reachExtend then reachExtend() end
-        if _G.hitboxExpand then expandHitbox() end
+        if _G.reachHack then createReachExtension() end
     end
 end)
 
