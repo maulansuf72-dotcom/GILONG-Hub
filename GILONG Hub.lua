@@ -89,19 +89,60 @@ end
 
 local function getBalls()
     local balls = {}
+    
+    -- Death Ball specific ball detection
     for _, obj in pairs(Workspace:GetDescendants()) do
-        if obj:IsA("BasePart") and (
-            obj.Name:lower():find("ball") or 
-            obj.Name:lower():find("football") or
-            obj.Name:lower():find("sphere") or
-            obj.Parent and obj.Parent.Name:lower():find("ball")
-        ) then
-            -- Additional checks for ball properties
-            if obj.Size.Magnitude > 1 and obj.Size.Magnitude < 20 then
-                table.insert(balls, obj)
+        if obj:IsA("BasePart") then
+            -- Check for Death Ball specific names and properties
+            local name = obj.Name:lower()
+            if name:find("ball") or name:find("football") or name:find("sphere") or 
+               name == "part" or name == "union" or name == "meshpart" then
+                
+                -- Death Ball balls usually have these properties
+                local hasVelocity = obj:FindFirstChild("BodyVelocity") or 
+                                  obj:FindFirstChild("BodyPosition") or 
+                                  obj:FindFirstChild("BodyAngularVelocity") or
+                                  obj.AssemblyLinearVelocity.Magnitude > 0
+                
+                -- Size check for Death Ball (usually around 4-8 studs)
+                local sizeCheck = obj.Size.Magnitude > 2 and obj.Size.Magnitude < 15
+                
+                -- Material check (Death Ball balls are often Neon or ForceField)
+                local materialCheck = obj.Material == Enum.Material.Neon or 
+                                    obj.Material == Enum.Material.ForceField or
+                                    obj.Material == Enum.Material.Glass
+                
+                -- Color check (Death Ball balls are often bright colors)
+                local colorCheck = obj.Color.R > 0.5 or obj.Color.G > 0.5 or obj.Color.B > 0.5
+                
+                if (hasVelocity or materialCheck or colorCheck) and sizeCheck then
+                    table.insert(balls, obj)
+                end
             end
         end
     end
+    
+    -- Fallback: check Workspace.Balls folder if exists
+    if Workspace:FindFirstChild("Balls") then
+        for _, ball in pairs(Workspace.Balls:GetChildren()) do
+            if ball:IsA("BasePart") then
+                table.insert(balls, ball)
+            end
+        end
+    end
+    
+    -- Another fallback: check for moving parts
+    if #balls == 0 then
+        for _, obj in pairs(Workspace:GetDescendants()) do
+            if obj:IsA("BasePart") and obj.AssemblyLinearVelocity.Magnitude > 10 then
+                local size = obj.Size.Magnitude
+                if size > 2 and size < 15 then
+                    table.insert(balls, obj)
+                end
+            end
+        end
+    end
+    
     return balls
 end
 
@@ -117,16 +158,32 @@ local function predictBallPath(ball, character)
 
     local velocity = Vector3.new(0, 0, 0)
     
-    -- Try multiple ways to get ball velocity
+    -- Try multiple ways to get ball velocity (Death Ball specific)
     if ball:FindFirstChild("BodyVelocity") then
         velocity = ball.BodyVelocity.Velocity
-    elseif ball:FindFirstChild("AssemblyLinearVelocity") then
+    elseif ball:FindFirstChild("BodyPosition") then
+        -- Some Death Ball versions use BodyPosition
+        local bodyPos = ball.BodyPosition
+        local currentPos = ball.Position
+        velocity = (bodyPos.Position - currentPos) * 2 -- Estimate velocity
+    elseif ball.AssemblyLinearVelocity then
         velocity = ball.AssemblyLinearVelocity
     elseif ball.Velocity then
         velocity = ball.Velocity
+    else
+        -- Fallback: calculate velocity from position change
+        if not ball:GetAttribute("LastPosition") then
+            ball:SetAttribute("LastPosition", ball.Position)
+            return nil, nil
+        end
+        
+        local lastPos = ball:GetAttribute("LastPosition")
+        local currentPos = ball.Position
+        velocity = (currentPos - lastPos) * 60 -- Assuming 60 FPS
+        ball:SetAttribute("LastPosition", currentPos)
     end
 
-    if velocity.Magnitude < 1 then return nil, nil end
+    if velocity.Magnitude < 5 then return nil, nil end -- Increased minimum velocity
 
     local playerPos = character.HumanoidRootPart.Position
     local ballPos = ball.Position
@@ -164,23 +221,53 @@ local function performParry()
         task.wait(_G.parryDelay)
     end
     
-    -- Try multiple parry methods
+    -- Try multiple parry methods for Death Ball
     safeCall(function()
-        -- Key press method
+        -- Key press method (F key for parry)
         UserInputService:SendKeyEvent(true, Enum.KeyCode.F, false, game)
         task.wait(0.05)
         UserInputService:SendKeyEvent(false, Enum.KeyCode.F, false, game)
     end)
     
-    -- Remote event method
+    -- Death Ball specific remote events
     safeCall(function()
         for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
-            if remote:IsA("RemoteEvent") and (
-                remote.Name:lower():find("parry") or
-                remote.Name:lower():find("deflect") or
-                remote.Name:lower():find("block")
-            ) then
-                remote:FireServer()
+            if remote:IsA("RemoteEvent") then
+                local name = remote.Name:lower()
+                if name:find("parry") or name:find("deflect") or name:find("block") or
+                   name:find("counter") or name:find("reflect") or name == "remote" or
+                   name == "re" or name == "r" or name:find("ball") then
+                    remote:FireServer()
+                    remote:FireServer(true)
+                    remote:FireServer("parry")
+                    remote:FireServer({["parry"] = true})
+                end
+            end
+        end
+    end)
+    
+    -- Try ReplicatedFirst remotes
+    safeCall(function()
+        local repFirst = game:GetService("ReplicatedFirst")
+        for _, remote in pairs(repFirst:GetDescendants()) do
+            if remote:IsA("RemoteEvent") then
+                local name = remote.Name:lower()
+                if name:find("parry") or name:find("deflect") or name:find("block") then
+                    remote:FireServer()
+                end
+            end
+        end
+    end)
+    
+    -- Try StarterPlayer remotes
+    safeCall(function()
+        local starterPlayer = game:GetService("StarterPlayer")
+        for _, remote in pairs(starterPlayer:GetDescendants()) do
+            if remote:IsA("RemoteEvent") then
+                local name = remote.Name:lower()
+                if name:find("parry") or name:find("deflect") or name:find("block") then
+                    remote:FireServer()
+                end
             end
         end
     end)
@@ -203,22 +290,33 @@ local function autoParry()
             local predictedPos, timeToReach = predictBallPath(ball, character)
             
             if predictedPos and timeToReach then
-                -- Check if ball is moving towards player
+                -- Check if ball is moving towards player (Death Ball specific)
                 local ballToPlayer = (hrp.Position - ball.Position).Unit
                 local ballVelocity = Vector3.new(0, 0, 0)
                 
                 if ball:FindFirstChild("BodyVelocity") then
-                    ballVelocity = ball.BodyVelocity.Velocity.Unit
+                    ballVelocity = ball.BodyVelocity.Velocity
                 elseif ball.AssemblyLinearVelocity then
-                    ballVelocity = ball.AssemblyLinearVelocity.Unit
+                    ballVelocity = ball.AssemblyLinearVelocity
+                elseif ball:GetAttribute("LastPosition") then
+                    local lastPos = ball:GetAttribute("LastPosition")
+                    ballVelocity = (ball.Position - lastPos) * 60
                 end
                 
-                local dot = ballToPlayer:Dot(ballVelocity)
-                
-                -- Improved parry conditions
-                if dot > 0.4 and timeToReach < 1.5 and timeToReach > 0.1 then
-                    if performParry() then
-                        break -- Only parry one ball at a time
+                if ballVelocity.Magnitude > 0 then
+                    ballVelocity = ballVelocity.Unit
+                    local dot = ballToPlayer:Dot(ballVelocity)
+                    
+                    -- More lenient parry conditions for Death Ball
+                    local distanceCondition = distance <= _G.parryRange
+                    local velocityCondition = dot > 0.2 -- More lenient angle
+                    local timeCondition = timeToReach < 2 and timeToReach > 0.05
+                    local speedCondition = ballVelocity.Magnitude > 0.1
+                    
+                    if distanceCondition and (velocityCondition or distance < 8) and timeCondition then
+                        if performParry() then
+                            break -- Only parry one ball at a time
+                        end
                     end
                 end
             end
@@ -325,16 +423,24 @@ local function spamAttack()
     lastAttack = currentTime
     
     safeCall(function()
+        -- Death Ball specific attack remotes
         for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
-            if remote:IsA("RemoteEvent") and (
-                remote.Name:lower():find("attack") or 
-                remote.Name:lower():find("swing") or
-                remote.Name:lower():find("hit") or
-                remote.Name:lower():find("punch")
-            ) then
-                remote:FireServer()
+            if remote:IsA("RemoteEvent") then
+                local name = remote.Name:lower()
+                if name:find("attack") or name:find("swing") or name:find("hit") or
+                   name:find("punch") or name:find("kick") or name:find("shoot") or
+                   name == "remote" or name == "re" or name == "r" then
+                    remote:FireServer()
+                    remote:FireServer("attack")
+                    remote:FireServer(true)
+                end
             end
         end
+        
+        -- Try key press for attack (usually Space or Click)
+        UserInputService:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
+        task.wait(0.05)
+        UserInputService:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
     end)
 end
 
@@ -384,8 +490,33 @@ local function antiAFK()
     end)
 end
 
+-- Debug function to help identify issues
+local function debugInfo()
+    if not _G.autoParry then return end
+    
+    local balls = getBalls()
+    if #balls > 0 then
+        print("[DEBUG] Found", #balls, "balls")
+        for i, ball in pairs(balls) do
+            print("[DEBUG] Ball", i, ":", ball.Name, "Position:", ball.Position, "Velocity:", ball.AssemblyLinearVelocity.Magnitude)
+        end
+    else
+        print("[DEBUG] No balls detected")
+    end
+    
+    -- Check for remotes
+    local remoteCount = 0
+    for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
+        if remote:IsA("RemoteEvent") then
+            remoteCount = remoteCount + 1
+        end
+    end
+    print("[DEBUG] Found", remoteCount, "RemoteEvents in ReplicatedStorage")
+end
+
 -- Main Loop
 local heartbeatConnection
+local debugTimer = 0
 heartbeatConnection = RunService.Heartbeat:Connect(function()
     safeCall(autoParry)
     safeCall(createBallESP)
@@ -393,6 +524,13 @@ heartbeatConnection = RunService.Heartbeat:Connect(function()
     safeCall(spamAttack)
     safeCall(applyCharacterEnhancements)
     safeCall(antiAFK)
+    
+    -- Debug info every 5 seconds
+    debugTimer = debugTimer + 1
+    if debugTimer >= 300 then -- 60 FPS * 5 seconds
+        debugTimer = 0
+        safeCall(debugInfo)
+    end
 end)
 
 -- Cleanup on player leaving
@@ -528,6 +666,31 @@ utilityTab:CreateToggle({
    end
 })
 
+utilityTab:CreateButton({
+   Name = "Debug Info",
+   Callback = function()
+       debugInfo()
+       
+       -- Print all RemoteEvents for manual inspection
+       print("=== ALL REMOTE EVENTS ===")
+       for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
+           if remote:IsA("RemoteEvent") then
+               print("Remote:", remote.Name, "Path:", remote:GetFullName())
+           end
+       end
+       print("========================")
+   end
+})
+
+utilityTab:CreateButton({
+   Name = "Force Parry Test",
+   Callback = function()
+       print("[TEST] Attempting force parry...")
+       performParry()
+       print("[TEST] Force parry completed")
+   end
+})
+
 -- Notification
 Rayfield:Notify({
    Title = "GILONG Hub Loaded!",
@@ -545,3 +708,6 @@ Rayfield:Notify({
 })
 
 print("GILONG Hub Death Ball Script loaded successfully!")
+print("[INFO] Use Debug Info button to check ball detection")
+print("[INFO] Use Force Parry Test to test parry function")
+print("[INFO] Auto debug info will print every 5 seconds when Auto Parry is enabled")
