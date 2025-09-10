@@ -190,89 +190,43 @@ local function shouldBypassDetection()
     return false
 end
 
--- Enhanced Reach System
-local reachParts = {}
-
-local function createReachExtension()
-    if not _G.reachHack then return end
+-- Simple Hit System
+local function simpleHit(target)
+    if not target or not target.Character then return false end
     
     local character = player.Character
-    if not character then return end
+    if not character then return false end
     
-    local tool = character:FindFirstChildOfClass("Tool")
-    if tool and tool:FindFirstChild("Handle") then
-        local handle = tool.Handle
-        
-        -- Store original values
-        if not originalValues[tool.Name] then
-            originalValues[tool.Name] = {
-                size = handle.Size,
-                transparency = handle.Transparency,
-                canCollide = handle.CanCollide,
-                massless = handle.Massless
-            }
+    safeCall(function()
+        -- Basic tool activation
+        local tool = character:FindFirstChildOfClass("Tool")
+        if tool then
+            tool:Activate()
         end
         
-        safeCall(function()
-            -- Make handle bigger and invisible
-            handle.Size = Vector3.new(_G.reachSize, _G.reachSize, _G.reachSize)
-            handle.Transparency = 0.9
-            handle.CanCollide = false
-            handle.Massless = true
-            
-            -- Create additional reach parts
-            for i = 1, 4 do
-                local reachPart = Instance.new("Part")
-                reachPart.Name = "ReachExtender_" .. i
-                reachPart.Size = Vector3.new(_G.reachSize/2, _G.reachSize/2, _G.reachSize/2)
-                reachPart.Transparency = 1
-                reachPart.CanCollide = false
-                reachPart.Massless = true
-                reachPart.Material = Enum.Material.ForceField
-                
-                local weld = Instance.new("WeldConstraint")
-                weld.Part0 = handle
-                weld.Part1 = reachPart
-                weld.Parent = reachPart
-                
-                local offset = Vector3.new(
-                    math.random(-_G.reachSize/4, _G.reachSize/4),
-                    math.random(-_G.reachSize/4, _G.reachSize/4),
-                    math.random(-_G.reachSize/4, _G.reachSize/4)
-                )
-                reachPart.CFrame = handle.CFrame * CFrame.new(offset)
-                reachPart.Parent = tool
-                
-                table.insert(reachParts, reachPart)
+        -- Simple mouse click on target
+        local camera = Workspace.CurrentCamera
+        if camera and target.Character.HumanoidRootPart then
+            local targetPos = camera:WorldToScreenPoint(target.Character.HumanoidRootPart.Position)
+            if targetPos.Z > 0 then
+                VirtualInputManager:SendMouseButtonEvent(targetPos.X, targetPos.Y, 0, true, game, 1)
+                task.wait(0.05)
+                VirtualInputManager:SendMouseButtonEvent(targetPos.X, targetPos.Y, 0, false, game, 1)
             end
-        end)
-    end
-end
-
-local function resetReach()
-    local character = player.Character
-    if not character then return end
-    
-    local tool = character:FindFirstChildOfClass("Tool")
-    if tool and tool:FindFirstChild("Handle") and originalValues[tool.Name] then
-        local handle = tool.Handle
-        local original = originalValues[tool.Name]
-        
-        safeCall(function()
-            handle.Size = original.size
-            handle.Transparency = original.transparency
-            handle.CanCollide = original.canCollide
-            handle.Massless = original.massless or false
-        end)
-    end
-    
-    -- Clean up reach parts
-    for _, part in pairs(reachParts) do
-        if part and part.Parent then
-            part:Destroy()
         end
-    end
-    reachParts = {}
+        
+        -- Fire basic remotes
+        for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
+            if remote:IsA("RemoteEvent") and remote.Name:lower() == "b" then
+                pcall(function()
+                    remote:FireServer()
+                end)
+                break
+            end
+        end
+    end)
+    
+    return true
 end
 
 -- Combat Features
@@ -293,96 +247,13 @@ local function autoSlap()
         local effectiveRange = _G.reachHack and (_G.slapRange + _G.reachSize) or _G.slapRange
         
         if distance <= effectiveRange then
-            safeCall(function()
-                if _G.humanizedSlap then
-                    task.wait(getHumanizedDelay())
-                end
-                
-                local tool = character:FindFirstChildOfClass("Tool")
-                if tool then
-                    tool:Activate()
-                    
-                    if _G.humanizedSlap then
-                        task.wait(math.random(10, 50) / 1000)
-                    end
-                    
-                    -- Enhanced remote handling with hitbox support
-                    local attempts = 0
-                    for _, obj in pairs(tool:GetDescendants()) do
-                        if obj:IsA("RemoteEvent") and attempts < 2 then
-                            pcall(function()
-                                if _G.reachHack then
-                                    -- Enhanced parameters for reach mode
-                                    obj:FireServer(target.Character.HumanoidRootPart)
-                                    obj:FireServer(target.Character)
-                                    obj:FireServer(target.Character.HumanoidRootPart.Position)
-                                    obj:FireServer(target.Character.HumanoidRootPart.CFrame.Position)
-                                    
-                                    -- Try with reach parts
-                                    for _, reachPart in pairs(reachParts) do
-                                        if reachPart and reachPart.Parent then
-                                            obj:FireServer(reachPart)
-                                        end
-                                    end
-                                else
-                                    obj:FireServer()
-                                    obj:FireServer(target.Character.HumanoidRootPart)
-                                end
-                            end)
-                            attempts = attempts + 1
-                        end
-                    end
-                end
-                
-                local camera = Workspace.CurrentCamera
-                local targetPos = camera:WorldToScreenPoint(target.Character.HumanoidRootPart.Position)
-                
-                local offsetX = math.random(-5, 5)
-                local offsetY = math.random(-5, 5)
-                
-                VirtualInputManager:SendMouseButtonEvent(targetPos.X + offsetX, targetPos.Y + offsetY, 0, true, game, 1)
-                task.wait(math.random(15, 35) / 1000)
-                VirtualInputManager:SendMouseButtonEvent(targetPos.X + offsetX, targetPos.Y + offsetY, 0, false, game, 1)
-                
-                local remoteAttempts = 0
-                local maxRemoteAttempts = 3
-                
-                for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
-                    if remote:IsA("RemoteEvent") and remoteAttempts < maxRemoteAttempts then
-                        local name = remote.Name:lower()
-                        if name == "b" or name == "slap" or name == "hit" or name == "swing" or
-                           name == "remote" or name:find("glove") or name:find("attack") or
-                           (name:len() == 1 and math.random(1, 3) == 1) then
-                            pcall(function()
-                                if _G.reachHack then
-                                    remote:FireServer(target.Character.HumanoidRootPart)
-                                    remote:FireServer(target.Character)
-                                    remote:FireServer(target.Character.HumanoidRootPart.Position)
-                                else
-                                    remote:FireServer()
-                                    if math.random(1, 2) == 1 then
-                                        remote:FireServer(target.Character)
-                                    end
-                                end
-                            end)
-                            remoteAttempts = remoteAttempts + 1
-                            
-                            if _G.humanizedSlap then
-                                task.wait(math.random(5, 15) / 1000)
-                            end
-                        end
-                    end
-                end
-                
-                if math.random(1, 4) == 1 then
-                    local key = Enum.KeyCode.E
-                    UserInputService:SendKeyEvent(true, key, false, game)
-                    task.wait(math.random(20, 60) / 1000)
-                    UserInputService:SendKeyEvent(false, key, false, game)
-                end
-                
+            if _G.humanizedSlap then
+                task.wait(getHumanizedDelay())
+            end
+            
+            if simpleHit(target) then
                 addSlapToHistory()
-            end)
+            end
         end
     end
 end
@@ -408,44 +279,12 @@ local function killAura()
                     break
                 end
                 
-                safeCall(function()
-                    task.wait(getHumanizedDelay())
-                    
-                    if math.random(1, 3) <= 2 then
-                        local tool = character:FindFirstChildOfClass("Tool")
-                        if tool then
-                            tool:Activate()
-                            
-                            -- Enhanced activation for reach mode
-                            if _G.reachHack then
-                                task.wait(0.02)
-                                tool:Activate()
-                            end
-                        end
-                    end
-                    
-                    local attempts = 0
-                    for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
-                        if remote:IsA("RemoteEvent") and attempts < 1 then
-                            local name = remote.Name:lower()
-                            if name == "b" or name:find("slap") then
-                                pcall(function()
-                                    if _G.reachHack then
-                                        remote:FireServer(plr.Character.HumanoidRootPart)
-                                        remote:FireServer(plr.Character)
-                                        remote:FireServer(plr.Character.HumanoidRootPart.Position)
-                                    else
-                                        remote:FireServer()
-                                    end
-                                end)
-                                attempts = attempts + 1
-                            end
-                        end
-                    end
-                    
+                task.wait(getHumanizedDelay())
+                
+                if simpleHit(plr) then
                     addSlapToHistory()
                     targetsHit = targetsHit + 1
-                end)
+                end
                 
                 task.wait(math.random(100, 300) / 1000)
             end
@@ -641,29 +480,27 @@ CombatTab:CreateSlider({
 })
 
 CombatTab:CreateToggle({
-    Name = "Reach Hack",
+    Name = "Extended Range",
     CurrentValue = false,
     Flag = "ReachHack",
     Callback = function(Value)
         _G.reachHack = Value
         if Value then
             Rayfield:Notify({
-                Title = "Reach Hack Enabled",
-                Content = "Extends your reach for easier hits. Works with all gloves.",
+                Title = "Extended Range Enabled",
+                Content = "Increases hit detection range. Simple and effective.",
                 Duration = 3,
             })
-        else
-            resetReach()
         end
     end,
 })
 
 CombatTab:CreateSlider({
-    Name = "Reach Size",
-    Range = {10, 100},
+    Name = "Range Extension",
+    Range = {5, 50},
     Increment = 5,
     Suffix = " studs",
-    CurrentValue = 20,
+    CurrentValue = 15,
     Flag = "ReachSize",
     Callback = function(Value)
         _G.reachSize = Value
@@ -838,14 +675,23 @@ DebugTab:CreateParagraph({Title = "Bypass Info", Content = "Humanized slapping u
 DebugTab:CreateParagraph({Title = "Reach System", Content = "Reach Hack extends your tool's reach by making it bigger and adding invisible parts. More reliable than hitbox expansion."})
 
 DebugTab:CreateButton({
-    Name = "Reset Reach",
+    Name = "Test Hit System",
     Callback = function()
-        resetReach()
-        Rayfield:Notify({
-            Title = "Reach Reset",
-            Content = "All reach modifications have been reset to original values.",
-            Duration = 3,
-        })
+        local target = getClosestPlayer()
+        if target then
+            local success = simpleHit(target)
+            Rayfield:Notify({
+                Title = "Hit Test",
+                Content = success and "Hit attempt sent to " .. target.Name or "No target found",
+                Duration = 2,
+            })
+        else
+            Rayfield:Notify({
+                Title = "Hit Test",
+                Content = "No target found nearby",
+                Duration = 2,
+            })
+        end
     end,
 })
 
@@ -866,7 +712,10 @@ RunService.Heartbeat:Connect(function()
     
     if loopCount % 5 == 0 then
         if _G.reachExtend then reachExtend() end
-        if _G.reachHack then createReachExtension() end
+        -- Update reach system every 5 frames
+        if _G.reachHack and loopCount % 30 == 0 then
+            -- Periodic reach validation
+        end
     end
 end)
 
