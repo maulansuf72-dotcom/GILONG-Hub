@@ -276,52 +276,104 @@ local function updateHP()
     end
 end
 
--- ESP System (Player Highlighting)
-local espBoxes = {}
+-- Enhanced ESP + Click TP System
+local mouse = player:GetMouse()
+local espConnections = {}
 
-local function createESP()
-    if not _G.esp then return end
+-- Add ESP to character
+local function addESP(char)
+    if not char or not _G.esp then return end
     
-    for _, plr in pairs(Players:GetPlayers()) do
-        if plr ~= player and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") and not espBoxes[plr] then
-            local character = plr.Character
-            local rootPart = character.HumanoidRootPart
-            
-            -- Create ESP box
-            local box = Instance.new("SelectionBox")
-            box.Adornee = character
-            box.Color3 = Color3.new(1, 0, 0) -- Red color
-            box.Transparency = 0.3
-            box.LineThickness = 0.1
-            box.Parent = rootPart
-            
-            -- Create name label
-            local billboard = Instance.new("BillboardGui")
-            billboard.Size = UDim2.new(0, 200, 0, 50)
-            billboard.StudsOffset = Vector3.new(0, 3, 0)
-            billboard.Parent = rootPart
-            
-            local nameLabel = Instance.new("TextLabel")
-            nameLabel.Size = UDim2.new(1, 0, 1, 0)
-            nameLabel.BackgroundTransparency = 1
-            nameLabel.Text = plr.Name
-            nameLabel.TextColor3 = Color3.new(1, 1, 1)
-            nameLabel.TextScaled = true
-            nameLabel.Font = Enum.Font.GothamBold
-            nameLabel.TextStrokeTransparency = 0
-            nameLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
-            nameLabel.Parent = billboard
-            
-            espBoxes[plr] = {box = box, billboard = billboard}
+    -- Remove existing highlight
+    local existingHighlight = char:FindFirstChild("ESP_Highlight")
+    if existingHighlight then
+        existingHighlight:Destroy()
+    end
+    
+    -- Create new highlight
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "ESP_Highlight"
+    highlight.Parent = char
+    highlight.Adornee = char
+    highlight.FillColor = Color3.fromRGB(0, 255, 0) -- Green
+    highlight.OutlineColor = Color3.fromRGB(255, 255, 255) -- White outline
+    highlight.FillTransparency = 0.5
+    highlight.OutlineTransparency = 0
+end
+
+-- Remove ESP from character
+local function removeESPFromChar(char)
+    if char then
+        local highlight = char:FindFirstChild("ESP_Highlight")
+        if highlight then
+            highlight:Destroy()
         end
     end
 end
 
-local function removeESP()
-    for plr, esp in pairs(espBoxes) do
-        if esp.box then esp.box:Destroy() end
-        if esp.billboard then esp.billboard:Destroy() end
-        espBoxes[plr] = nil
+-- Setup ESP for all players
+local function setupESP()
+    if not _G.esp then return end
+    
+    -- Add ESP to existing players
+    for _, plr in pairs(Players:GetPlayers()) do
+        if plr ~= player and plr.Character then
+            addESP(plr.Character)
+        end
+        
+        -- Connect to new characters
+        if not espConnections[plr] then
+            espConnections[plr] = plr.CharacterAdded:Connect(function(char)
+                if plr ~= player and _G.esp then
+                    task.wait(1) -- Wait for character to load
+                    addESP(char)
+                end
+            end)
+        end
+    end
+end
+
+-- Remove all ESP
+local function removeAllESP()
+    for _, plr in pairs(Players:GetPlayers()) do
+        if plr.Character then
+            removeESPFromChar(plr.Character)
+        end
+    end
+    
+    -- Disconnect connections
+    for plr, connection in pairs(espConnections) do
+        if connection then
+            connection:Disconnect()
+        end
+        espConnections[plr] = nil
+    end
+end
+
+-- Click to teleport function
+local clickTeleportConnection
+local function setupClickTeleport()
+    if clickTeleportConnection then
+        clickTeleportConnection:Disconnect()
+    end
+    
+    if _G.teleportToPlayers then
+        clickTeleportConnection = mouse.Button1Down:Connect(function()
+            if mouse.Target and mouse.Target.Parent then
+                local targetPlayer = Players:GetPlayerFromCharacter(mouse.Target.Parent)
+                if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                    local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                    if hrp then
+                        hrp.CFrame = targetPlayer.Character.HumanoidRootPart.CFrame + Vector3.new(0, 3, 0)
+                        Rayfield:Notify({
+                            Title = "Teleported!",
+                            Content = "Teleported to " .. targetPlayer.Name,
+                            Duration = 2,
+                        })
+                    end
+                end
+            end
+        end)
     end
 end
 
@@ -601,29 +653,36 @@ CombatTab:CreateToggle({
     Callback = function(Value)
         _G.esp = Value
         if Value then
+            setupESP()
             Rayfield:Notify({
                 Title = "ESP Enabled",
-                Content = "Players are now highlighted with red boxes and names!",
+                Content = "Players highlighted in green! Click to teleport if enabled.",
                 Duration = 3,
             })
         else
-            removeESP()
+            removeAllESP()
         end
     end,
 })
 
 CombatTab:CreateToggle({
-    Name = "Teleport to Players",
+    Name = "Click to Teleport",
     CurrentValue = false,
     Flag = "TeleportToPlayers",
     Callback = function(Value)
         _G.teleportToPlayers = Value
+        setupClickTeleport()
         if Value then
             Rayfield:Notify({
-                Title = "Teleport Mode Enabled",
-                Content = "Click on players to teleport to them!",
+                Title = "Click Teleport Enabled",
+                Content = "Click on any player to teleport to them!",
                 Duration = 3,
             })
+        else
+            if clickTeleportConnection then
+                clickTeleportConnection:Disconnect()
+                clickTeleportConnection = nil
+            end
         end
     end,
 })
@@ -820,12 +879,15 @@ DebugTab:CreateButton({
 })
 
 DebugTab:CreateButton({
-    Name = "Clear ESP",
+    Name = "Refresh ESP",
     Callback = function()
-        removeESP()
+        removeAllESP()
+        if _G.esp then
+            setupESP()
+        end
         Rayfield:Notify({
-            Title = "ESP Cleared",
-            Content = "All ESP boxes removed",
+            Title = "ESP Refreshed",
+            Content = "ESP system refreshed for all players",
             Duration = 2,
         })
     end,
@@ -934,8 +996,8 @@ RunService.Heartbeat:Connect(function()
     
     if loopCount % 5 == 0 then
         if _G.reachExtend then reachExtend() end
-        if _G.esp and loopCount % 60 == 0 then
-            createESP()
+        if _G.esp and loopCount % 120 == 0 then
+            setupESP()
         end
     end
 end)
