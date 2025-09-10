@@ -68,6 +68,20 @@ _G.antiAFK = false
 _G.reachExtend = false
 _G.reachDistance = 25
 
+-- Glove-specific configurations
+local gloveConfigs = {
+    ["Default"] = {range = 15, hitbox = "normal", method = "standard"},
+    ["Extended"] = {range = 25, hitbox = "extended", method = "reach"},
+    ["Megarock"] = {range = 30, hitbox = "large", method = "heavy"},
+    ["Killstreak"] = {range = 20, hitbox = "normal", method = "fast"},
+    ["Reverse"] = {range = 15, hitbox = "reverse", method = "special"},
+    ["Shukuchi"] = {range = 40, hitbox = "teleport", method = "instant"},
+    ["Za Hando"] = {range = 35, hitbox = "void", method = "erase"},
+    ["Stop Sign"] = {range = 18, hitbox = "normal", method = "stun"},
+    ["Pusher"] = {range = 22, hitbox = "push", method = "knockback"},
+    ["Anchor"] = {range = 16, hitbox = "normal", method = "pull"}
+}
+
 -- Anti-Cheat Bypass Variables
 _G.humanizedSlap = true
 _G.randomDelay = true
@@ -100,17 +114,35 @@ local function getDistance(part1, part2)
     return (part1.Position - part2.Position).Magnitude
 end
 
+local function getCurrentGlove()
+    local character = player.Character
+    if character then
+        local tool = character:FindFirstChildOfClass("Tool")
+        if tool then
+            return tool.Name
+        end
+    end
+    return "Default"
+end
+
+local function getGloveConfig(gloveName)
+    return gloveConfigs[gloveName] or gloveConfigs["Default"]
+end
+
 local function getClosestPlayer()
     local character = player.Character
     if not character or not character:FindFirstChild("HumanoidRootPart") then return nil end
     
     local closestPlayer = nil
     local closestDistance = math.huge
+    local currentGlove = getCurrentGlove()
+    local config = getGloveConfig(currentGlove)
+    local effectiveRange = config.range
     
     for _, plr in pairs(Players:GetPlayers()) do
         if plr ~= player and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
             local distance = getDistance(character.HumanoidRootPart, plr.Character.HumanoidRootPart)
-            if distance < closestDistance then
+            if distance < closestDistance and distance <= effectiveRange then
                 closestDistance = distance
                 closestPlayer = plr
             end
@@ -196,12 +228,15 @@ local function autoSlap()
         return
     end
     
+    local currentGlove = getCurrentGlove()
+    local config = getGloveConfig(currentGlove)
     local target = getClosestPlayer()
     
     if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
         local distance = getDistance(character.HumanoidRootPart, target.Character.HumanoidRootPart)
+        local effectiveRange = math.max(_G.slapRange, config.range)
         
-        if distance <= _G.slapRange then
+        if distance <= effectiveRange then
             safeCall(function()
                 if _G.humanizedSlap then
                     task.wait(getHumanizedDelay())
@@ -209,18 +244,46 @@ local function autoSlap()
                 
                 local tool = character:FindFirstChildOfClass("Tool")
                 if tool then
-                    tool:Activate()
+                    -- Glove-specific activation
+                    if config.method == "instant" then
+                        -- For teleport gloves like Shukuchi
+                        tool:Activate()
+                        task.wait(0.1)
+                        tool:Activate()
+                    elseif config.method == "heavy" then
+                        -- For heavy gloves like Megarock
+                        tool:Activate()
+                        if _G.humanizedSlap then
+                            task.wait(math.random(100, 200) / 1000)
+                        end
+                    else
+                        -- Standard activation
+                        tool:Activate()
+                    end
                     
                     if _G.humanizedSlap then
                         task.wait(math.random(10, 50) / 1000)
                     end
                     
+                    -- Glove-specific remote handling
                     local attempts = 0
+                    local maxAttempts = config.method == "fast" and 3 or 2
+                    
                     for _, obj in pairs(tool:GetDescendants()) do
-                        if obj:IsA("RemoteEvent") and attempts < 2 then
+                        if obj:IsA("RemoteEvent") and attempts < maxAttempts then
                             pcall(function()
-                                obj:FireServer()
-                                obj:FireServer(target.Character.HumanoidRootPart)
+                                if config.hitbox == "extended" or config.hitbox == "large" then
+                                    -- For extended reach gloves
+                                    obj:FireServer(target.Character.HumanoidRootPart.Position)
+                                    obj:FireServer(target.Character)
+                                elseif config.hitbox == "teleport" then
+                                    -- For teleport gloves
+                                    obj:FireServer(target.Character.HumanoidRootPart.CFrame)
+                                else
+                                    -- Standard parameters
+                                    obj:FireServer()
+                                    obj:FireServer(target.Character.HumanoidRootPart)
+                                end
                             end)
                             attempts = attempts + 1
                         end
@@ -280,8 +343,11 @@ local function killAura()
     local character = player.Character
     if not character or not character:FindFirstChild("HumanoidRootPart") then return end
     
+    local currentGlove = getCurrentGlove()
+    local config = getGloveConfig(currentGlove)
     local targetsHit = 0
-    local maxTargets = 2
+    local maxTargets = config.method == "fast" and 3 or 2
+    local effectiveRange = math.max(_G.auraRange, config.range)
     
     for _, plr in pairs(Players:GetPlayers()) do
         if targetsHit >= maxTargets then break end
@@ -289,7 +355,7 @@ local function killAura()
         if plr ~= player and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
             local distance = getDistance(character.HumanoidRootPart, plr.Character.HumanoidRootPart)
             
-            if distance <= _G.auraRange then
+            if distance <= effectiveRange then
                 if isRateLimited() then
                     break
                 end
@@ -300,7 +366,16 @@ local function killAura()
                     if math.random(1, 3) <= 2 then
                         local tool = character:FindFirstChildOfClass("Tool")
                         if tool then
-                            tool:Activate()
+                            -- Glove-specific aura activation
+                            if config.method == "instant" then
+                                tool:Activate()
+                                task.wait(0.05)
+                            elseif config.method == "heavy" then
+                                tool:Activate()
+                                task.wait(0.15)
+                            else
+                                tool:Activate()
+                            end
                         end
                     end
                     
@@ -425,6 +500,13 @@ CombatTab:CreateToggle({
     Flag = "AutoSlap",
     Callback = function(Value)
         _G.autoSlap = Value
+        if Value then
+            Rayfield:Notify({
+                Title = "Auto Slap Enabled",
+                Content = "Automatically slaps nearest players. Adapts to your current glove type.",
+                Duration = 3,
+            })
+        end
     end,
 })
 
@@ -434,6 +516,13 @@ CombatTab:CreateToggle({
     Flag = "KillAura",
     Callback = function(Value)
         _G.killAura = Value
+        if Value then
+            Rayfield:Notify({
+                Title = "Kill Aura Enabled",
+                Content = "Attacks multiple players in range. Works best with fast gloves.",
+                Duration = 3,
+            })
+        end
     end,
 })
 
@@ -507,6 +596,13 @@ MovementTab:CreateToggle({
     Flag = "SpeedBoost",
     Callback = function(Value)
         _G.speedBoost = Value
+        if Value then
+            Rayfield:Notify({
+                Title = "Speed Boost Enabled",
+                Content = "Increases your walking speed. Adjust value in slider below.",
+                Duration = 3,
+            })
+        end
     end,
 })
 
@@ -528,6 +624,13 @@ MovementTab:CreateToggle({
     Flag = "FlyHack",
     Callback = function(Value)
         _G.flyHack = Value
+        if Value then
+            Rayfield:Notify({
+                Title = "Fly Hack Enabled",
+                Content = "Use WASD to fly around. Space = up, Shift = down.",
+                Duration = 3,
+            })
+        end
     end,
 })
 
@@ -565,6 +668,13 @@ UtilityTab:CreateToggle({
     Flag = "AntiVoid",
     Callback = function(Value)
         _G.antiVoid = Value
+        if Value then
+            Rayfield:Notify({
+                Title = "Anti Void Enabled",
+                Content = "Prevents falling into void. Auto teleports you back to arena.",
+                Duration = 3,
+            })
+        end
     end,
 })
 
@@ -590,7 +700,15 @@ UtilityTab:CreateToggle({
 DebugTab:CreateButton({
     Name = "Debug Info",
     Callback = function()
+        local currentGlove = getCurrentGlove()
+        local config = getGloveConfig(currentGlove)
+        
         print("=== DEBUG INFO ===")
+        print("Current Glove:", currentGlove)
+        print("Glove Config:")
+        print("  - Range:", config.range)
+        print("  - Hitbox:", config.hitbox)
+        print("  - Method:", config.method)
         print("Slap Count:", slapCount)
         print("Last Slap Time:", lastSlapTime)
         print("Rate Limited:", isRateLimited())
@@ -635,6 +753,22 @@ DebugTab:CreateButton({
 DebugTab:CreateLabel("Anti-Cheat Status")
 
 DebugTab:CreateParagraph({Title = "Bypass Info", Content = "Humanized slapping uses random delays and patterns to avoid detection. Lower cooldown = higher risk. Max 2 slaps/second recommended."})
+
+DebugTab:CreateParagraph({Title = "Glove Support", Content = "Script automatically adapts to your equipped glove. Extended gloves use longer range, heavy gloves use different timing, teleport gloves use special activation."})
+
+DebugTab:CreateButton({
+    Name = "Check Current Glove",
+    Callback = function()
+        local currentGlove = getCurrentGlove()
+        local config = getGloveConfig(currentGlove)
+        
+        Rayfield:Notify({
+            Title = "Current Glove: " .. currentGlove,
+            Content = "Range: " .. config.range .. " | Type: " .. config.hitbox .. " | Method: " .. config.method,
+            Duration = 5,
+        })
+    end,
+})
 
 -- Main Loop
 local loopCount = 0
