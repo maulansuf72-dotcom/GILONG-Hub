@@ -32,15 +32,14 @@ local Window = Rayfield:CreateWindow({
       SaveKey = true,
       GrabKeyFromSite = true,
       Key = {"SlapKing2025!"}
-   }
+   },
 })
 
 -- Create Tabs
-local combatTab = Window:CreateTab("👊 Combat", nil)
-local farmTab = Window:CreateTab("💰 Farming", nil)
-local movementTab = Window:CreateTab("🏃‍♂️ Movement", nil)
-local visualTab = Window:CreateTab("👁️ Visuals", nil)
-local utilityTab = Window:CreateTab("🔧 Utility", nil)
+local CombatTab = Window:CreateTab("👊 Combat", nil)
+local MovementTab = Window:CreateTab("🏃‍♂️ Movement", nil)
+local UtilityTab = Window:CreateTab("🔧 Utility", nil)
+local DebugTab = Window:CreateTab("🔧 Debug", nil)
 
 -- Services
 local Players = game:GetService("Players")
@@ -48,40 +47,26 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
-local TweenService = game:GetService("TweenService")
 local VirtualUser = game:GetService("VirtualUser")
 local VirtualInputManager = game:GetService("VirtualInputManager")
-local PathfindingService = game:GetService("PathfindingService")
 
 local player = Players.LocalPlayer
-local mouse = player:GetMouse()
 
 -- Global Variables
 _G.autoSlap = false
 _G.slapRange = 15
-_G.autoTarget = false
-_G.targetMode = "nearest"
-_G.autoFarm = false
-_G.farmSlaps = false
-_G.autoBadge = false
+_G.killAura = false
+_G.auraRange = 20
 _G.speedBoost = false
 _G.speedValue = 25
 _G.flyHack = false
-_G.flySpeed = 50
 _G.infiniteJump = false
 _G.noclip = false
-_G.playerESP = false
-_G.gloveESP = false
 _G.antiRagdoll = false
 _G.antiVoid = false
-_G.autoRespawn = false
-_G.killAura = false
-_G.auraRange = 20
+_G.antiAFK = false
 _G.reachExtend = false
 _G.reachDistance = 25
-_G.antiAFK = false
-_G.autoEquip = false
-_G.selectedGlove = "Default"
 
 -- Anti-Cheat Bypass Variables
 _G.humanizedSlap = true
@@ -93,10 +78,6 @@ _G.bypassMode = true
 -- Storage
 local connections = {}
 local espObjects = {}
-local originalValues = {}
-local targetPlayer = nil
-
--- Anti-Cheat Bypass Storage
 local lastSlapTime = 0
 local slapCount = 0
 local slapHistory = {}
@@ -139,50 +120,14 @@ local function getClosestPlayer()
     return closestPlayer
 end
 
-local function getGloves()
-    local gloves = {}
-    local character = player.Character
-    
-    -- Check equipped tools
-    if character then
-        for _, obj in pairs(character:GetChildren()) do
-            if obj:IsA("Tool") then
-                table.insert(gloves, obj.Name)
-            end
-        end
-    end
-    
-    -- Check backpack
-    for _, obj in pairs(player.Backpack:GetChildren()) do
-        if obj:IsA("Tool") then
-            table.insert(gloves, obj.Name)
-        end
-    end
-    
-    return gloves
-end
-
-local function getCurrentGlove()
-    local character = player.Character
-    if character then
-        local tool = character:FindFirstChildOfClass("Tool")
-        if tool then
-            return tool.Name
-        end
-    end
-    return "None"
-end
-
 -- Anti-Cheat Bypass Functions
 local function isRateLimited()
     local currentTime = tick()
     
-    -- Check cooldown
     if currentTime - lastSlapTime < _G.slapCooldown then
         return true
     end
     
-    -- Check rate limiting (slaps per second)
     local recentSlaps = 0
     for i = #slapHistory, 1, -1 do
         if currentTime - slapHistory[i] <= 1 then
@@ -205,7 +150,6 @@ local function addSlapToHistory()
     lastSlapTime = currentTime
     slapCount = slapCount + 1
     
-    -- Clean old entries (keep only last 10 seconds)
     for i = #slapHistory, 1, -1 do
         if currentTime - slapHistory[i] > 10 then
             table.remove(slapHistory, i)
@@ -219,7 +163,6 @@ local function getHumanizedDelay()
     local pattern = humanPatterns[currentPattern]
     local delay = math.random(pattern[1] * 100, pattern[2] * 100) / 100
     
-    -- Change pattern occasionally
     if math.random(1, 10) == 1 then
         currentPattern = math.random(1, #humanPatterns)
     end
@@ -230,12 +173,10 @@ end
 local function shouldBypassDetection()
     if not _G.bypassMode then return false end
     
-    -- Skip slap occasionally to seem more human
     if math.random(1, 20) == 1 then
         return true
     end
     
-    -- Skip if too many recent slaps
     if slapCount > 0 and slapCount % 15 == 0 then
         task.wait(math.random(1, 3))
         return true
@@ -251,7 +192,6 @@ local function autoSlap()
     local character = player.Character
     if not character or not character:FindFirstChild("HumanoidRootPart") then return end
     
-    -- Anti-cheat checks
     if isRateLimited() or shouldBypassDetection() then
         return
     end
@@ -263,21 +203,18 @@ local function autoSlap()
         
         if distance <= _G.slapRange then
             safeCall(function()
-                -- Add humanized delay before slapping
                 if _G.humanizedSlap then
                     task.wait(getHumanizedDelay())
                 end
-                -- Method 1: Direct tool activation (most reliable)
+                
                 local tool = character:FindFirstChildOfClass("Tool")
                 if tool then
                     tool:Activate()
                     
-                    -- Humanized delay between tool activation and remote calls
                     if _G.humanizedSlap then
-                        task.wait(math.random(10, 50) / 1000) -- 10-50ms delay
+                        task.wait(math.random(10, 50) / 1000)
                     end
                     
-                    -- Try firing tool's remotes with limited attempts
                     local attempts = 0
                     for _, obj in pairs(tool:GetDescendants()) do
                         if obj:IsA("RemoteEvent") and attempts < 2 then
@@ -290,19 +227,16 @@ local function autoSlap()
                     end
                 end
                 
-                -- Method 2: Mouse simulation with slight randomization
                 local camera = Workspace.CurrentCamera
                 local targetPos = camera:WorldToScreenPoint(target.Character.HumanoidRootPart.Position)
                 
-                -- Add slight randomization to mouse position
                 local offsetX = math.random(-5, 5)
                 local offsetY = math.random(-5, 5)
                 
                 VirtualInputManager:SendMouseButtonEvent(targetPos.X + offsetX, targetPos.Y + offsetY, 0, true, game, 1)
-                task.wait(math.random(15, 35) / 1000) -- Randomized click duration
+                task.wait(math.random(15, 35) / 1000)
                 VirtualInputManager:SendMouseButtonEvent(targetPos.X + offsetX, targetPos.Y + offsetY, 0, false, game, 1)
                 
-                -- Method 3: Limited remote attempts to avoid detection
                 local remoteAttempts = 0
                 local maxRemoteAttempts = 3
                 
@@ -311,9 +245,8 @@ local function autoSlap()
                         local name = remote.Name:lower()
                         if name == "b" or name == "slap" or name == "hit" or name == "swing" or
                            name == "remote" or name:find("glove") or name:find("attack") or
-                           (name:len() == 1 and math.random(1, 3) == 1) then -- Randomize single letter attempts
+                           (name:len() == 1 and math.random(1, 3) == 1) then
                             pcall(function()
-                                -- Only send most likely to work parameters
                                 remote:FireServer()
                                 if math.random(1, 2) == 1 then
                                     remote:FireServer(target.Character)
@@ -321,7 +254,6 @@ local function autoSlap()
                             end)
                             remoteAttempts = remoteAttempts + 1
                             
-                            -- Small delay between remote calls
                             if _G.humanizedSlap then
                                 task.wait(math.random(5, 15) / 1000)
                             end
@@ -329,24 +261,13 @@ local function autoSlap()
                     end
                 end
                 
-                -- Method 4: Try StarterPlayer remotes
-                for _, remote in pairs(game:GetService("StarterPlayer"):GetDescendants()) do
-                    if remote:IsA("RemoteEvent") and remote.Name:lower():find("slap") then
-                        pcall(function()
-                            remote:FireServer(target.Character)
-                        end)
-                    end
-                end
-                
-                -- Method 5: Limited key simulation
-                if math.random(1, 4) == 1 then -- Only 25% chance to use keys
-                    local key = Enum.KeyCode.E -- Only use E key to be less suspicious
+                if math.random(1, 4) == 1 then
+                    local key = Enum.KeyCode.E
                     UserInputService:SendKeyEvent(true, key, false, game)
-                    task.wait(math.random(20, 60) / 1000) -- Humanized key hold time
+                    task.wait(math.random(20, 60) / 1000)
                     UserInputService:SendKeyEvent(false, key, false, game)
                 end
                 
-                -- Record this slap attempt
                 addSlapToHistory()
             end)
         end
@@ -359,9 +280,8 @@ local function killAura()
     local character = player.Character
     if not character or not character:FindFirstChild("HumanoidRootPart") then return end
     
-    -- Anti-cheat: Limit aura to fewer targets and add delays
     local targetsHit = 0
-    local maxTargets = 2 -- Limit simultaneous targets
+    local maxTargets = 2
     
     for _, plr in pairs(Players:GetPlayers()) do
         if targetsHit >= maxTargets then break end
@@ -370,66 +290,131 @@ local function killAura()
             local distance = getDistance(character.HumanoidRootPart, plr.Character.HumanoidRootPart)
             
             if distance <= _G.auraRange then
-                -- Check rate limiting per target
                 if isRateLimited() then
                     break
                 end
                 
                 safeCall(function()
-                    -- Humanized delay before each target
                     task.wait(getHumanizedDelay())
                     
-                    -- Method 1: Tool activation with chance
-                    if math.random(1, 3) <= 2 then -- 66% chance
+                    if math.random(1, 3) <= 2 then
                         local tool = character:FindFirstChildOfClass("Tool")
                         if tool then
                             tool:Activate()
                         end
                     end
                     
-                    -- Method 2: Limited remote attempts
                     local attempts = 0
                     for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
                         if remote:IsA("RemoteEvent") and attempts < 1 then
                             local name = remote.Name:lower()
                             if name == "b" or name:find("slap") then
                                 pcall(function()
-                                    -- Only send most likely to work parameters
                                     remote:FireServer()
                                 end)
                                 attempts = attempts + 1
                             end
                         end
                     end
-{{ ... }}
+                    
+                    addSlapToHistory()
+                    targetsHit = targetsHit + 1
+                end)
+                
+                task.wait(math.random(100, 300) / 1000)
             end
         end
     end
-end)
+end
 
--- Main Loop with reduced frequency for some features
-local loopCount = 0
-RunService.Heartbeat:Connect(function()
-    loopCount = loopCount + 1
+-- Movement Features
+local function speedBoost()
+    if not _G.speedBoost then return end
     
-    -- High frequency features (every frame)
-    if _G.autoSlap then autoSlap() end
-    if _G.killAura then killAura() end
-    if _G.speedBoost then speedBoost() end
-    if _G.flyHack then flyHack() end
-    if _G.infiniteJump then infiniteJump() end
-    if _G.noclip then noclip() end
-    if _G.antiRagdoll then antiRagdoll() end
-    if _G.antiVoid then antiVoid() end
-    if _G.antiAFK then antiAFK() end
-    
-    -- Lower frequency features (every 10 frames to reduce load)
-    if loopCount % 10 == 0 then
-        if _G.autoFarm then autoFarm() end
-        if _G.reachExtend then reachExtend() end
-        if _G.autoEquip then autoEquipGlove() end
+    local character = player.Character
+    if character and character:FindFirstChild("Humanoid") then
+        character.Humanoid.WalkSpeed = _G.speedValue
     end
-end)
+end
+
+local function flyHack()
+    if not _G.flyHack then return end
+    
+    local character = player.Character
+    if not character or not character:FindFirstChild("HumanoidRootPart") then return end
+    
+    local humanoidRootPart = character.HumanoidRootPart
+    
+    if not humanoidRootPart:FindFirstChild("BodyVelocity") then
+        local bodyVelocity = Instance.new("BodyVelocity")
+        bodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+        bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+        bodyVelocity.Parent = humanoidRootPart
+    end
+end
+
+local function infiniteJump()
+    if not _G.infiniteJump then return end
+    
+    local character = player.Character
+    if character and character:FindFirstChild("Humanoid") then
+        character.Humanoid.JumpPower = 100
+    end
+end
+
+local function noclip()
+    if not _G.noclip then return end
+    
+    local character = player.Character
+    if character then
+        for _, part in pairs(character:GetChildren()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = false
+            end
+        end
+    end
+end
+
+-- Utility Features
+local function antiRagdoll()
+    if not _G.antiRagdoll then return end
+    
+    local character = player.Character
+    if character and character:FindFirstChild("Humanoid") then
+        character.Humanoid.PlatformStand = false
+    end
+end
+
+local function antiVoid()
+    if not _G.antiVoid then return end
+    
+    local character = player.Character
+    if character and character:FindFirstChild("HumanoidRootPart") then
+        if character.HumanoidRootPart.Position.Y < -50 then
+            character.HumanoidRootPart.CFrame = CFrame.new(0, 10, 0)
+        end
+    end
+end
+
+local function antiAFK()
+    if not _G.antiAFK then return end
+    
+    VirtualUser:CaptureController()
+    VirtualUser:ClickButton2(Vector2.new())
+end
+
+local function reachExtend()
+    if not _G.reachExtend then return end
+    
+    local character = player.Character
+    if character then
+        local tool = character:FindFirstChildOfClass("Tool")
+        if tool and tool:FindFirstChild("Handle") then
+            tool.Handle.Size = Vector3.new(_G.reachDistance, _G.reachDistance, _G.reachDistance)
+            tool.Handle.Transparency = 0.5
+        end
+    end
+end
 
 -- GUI Elements
 
@@ -440,6 +425,15 @@ CombatTab:CreateToggle({
     Flag = "AutoSlap",
     Callback = function(Value)
         _G.autoSlap = Value
+    end,
+})
+
+CombatTab:CreateToggle({
+    Name = "Kill Aura",
+    CurrentValue = false,
+    Flag = "KillAura",
+    Callback = function(Value)
+        _G.killAura = Value
     end,
 })
 
@@ -474,23 +468,129 @@ CombatTab:CreateSlider({
     Name = "Slap Range",
     Range = {5, 50},
     Increment = 1,
-{{ ... }}
-           end
-       end)
-   end
+    Suffix = " studs",
+    CurrentValue = 15,
+    Flag = "SlapRange",
+    Callback = function(Value)
+        _G.slapRange = Value
+    end,
+})
+
+CombatTab:CreateSlider({
+    Name = "Slap Cooldown",
+    Range = {0.1, 2.0},
+    Increment = 0.1,
+    Suffix = "s",
+    CurrentValue = 0.5,
+    Flag = "SlapCooldown",
+    Callback = function(Value)
+        _G.slapCooldown = Value
+    end,
+})
+
+CombatTab:CreateSlider({
+    Name = "Max Slaps/Second",
+    Range = {1, 5},
+    Increment = 1,
+    Suffix = " slaps",
+    CurrentValue = 2,
+    Flag = "MaxSlapRate",
+    Callback = function(Value)
+        _G.maxSlapRate = Value
+    end,
+})
+
+-- Movement Tab
+MovementTab:CreateToggle({
+    Name = "Speed Boost",
+    CurrentValue = false,
+    Flag = "SpeedBoost",
+    Callback = function(Value)
+        _G.speedBoost = Value
+    end,
+})
+
+MovementTab:CreateSlider({
+    Name = "Speed Value",
+    Range = {16, 100},
+    Increment = 1,
+    Suffix = " speed",
+    CurrentValue = 25,
+    Flag = "SpeedValue",
+    Callback = function(Value)
+        _G.speedValue = Value
+    end,
+})
+
+MovementTab:CreateToggle({
+    Name = "Fly Hack",
+    CurrentValue = false,
+    Flag = "FlyHack",
+    Callback = function(Value)
+        _G.flyHack = Value
+    end,
+})
+
+MovementTab:CreateToggle({
+    Name = "Infinite Jump",
+    CurrentValue = false,
+    Flag = "InfiniteJump",
+    Callback = function(Value)
+        _G.infiniteJump = Value
+    end,
+})
+
+MovementTab:CreateToggle({
+    Name = "Noclip",
+    CurrentValue = false,
+    Flag = "Noclip",
+    Callback = function(Value)
+        _G.noclip = Value
+    end,
+})
+
+-- Utility Tab
+UtilityTab:CreateToggle({
+    Name = "Anti Ragdoll",
+    CurrentValue = false,
+    Flag = "AntiRagdoll",
+    Callback = function(Value)
+        _G.antiRagdoll = Value
+    end,
+})
+
+UtilityTab:CreateToggle({
+    Name = "Anti Void",
+    CurrentValue = false,
+    Flag = "AntiVoid",
+    Callback = function(Value)
+        _G.antiVoid = Value
+    end,
+})
+
+UtilityTab:CreateToggle({
+    Name = "Anti AFK",
+    CurrentValue = false,
+    Flag = "AntiAFK",
+    Callback = function(Value)
+        _G.antiAFK = Value
+    end,
+})
+
+UtilityTab:CreateToggle({
+    Name = "Reach Extend",
+    CurrentValue = false,
+    Flag = "ReachExtend",
+    Callback = function(Value)
+        _G.reachExtend = Value
+    end,
 })
 
 -- Debug Tab
 DebugTab:CreateButton({
     Name = "Debug Info",
     Callback = function()
-        local character = player.Character
-        local currentGlove = getCurrentGlove()
-        local availableGloves = getAvailableGloves()
-        
         print("=== DEBUG INFO ===")
-        print("Current Glove:", currentGlove)
-        print("Available Gloves:", table.concat(availableGloves, ", "))
         print("Slap Count:", slapCount)
         print("Last Slap Time:", lastSlapTime)
         print("Rate Limited:", isRateLimited())
@@ -500,16 +600,6 @@ DebugTab:CreateButton({
         print("  - Bypass Mode:", _G.bypassMode)
         print("  - Cooldown:", _G.slapCooldown)
         print("  - Max Rate:", _G.maxSlapRate)
-        
-        if character then
-            local tool = character:FindFirstChildOfClass("Tool")
-            if tool then
-                print("Tool Children:")
-                for _, child in pairs(tool:GetChildren()) do
-                    print("  -", child.Name, "(", child.ClassName, ")")
-                end
-            end
-        end
         
         print("Remote Events:")
         for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
@@ -546,18 +636,23 @@ DebugTab:CreateLabel("Anti-Cheat Status")
 
 DebugTab:CreateParagraph({Title = "Bypass Info", Content = "Humanized slapping uses random delays and patterns to avoid detection. Lower cooldown = higher risk. Max 2 slaps/second recommended."})
 
--- Cleanup
-Players.PlayerRemoving:Connect(function(plr)
-    if plr == player then
-        clearESP()
-        if heartbeatConnection then
-            heartbeatConnection:Disconnect()
-        end
-        for _, connection in pairs(connections) do
-            if connection then
-                connection:Disconnect()
-            end
-        end
+-- Main Loop
+local loopCount = 0
+RunService.Heartbeat:Connect(function()
+    loopCount = loopCount + 1
+    
+    if _G.autoSlap then autoSlap() end
+    if _G.killAura then killAura() end
+    if _G.speedBoost then speedBoost() end
+    if _G.flyHack then flyHack() end
+    if _G.infiniteJump then infiniteJump() end
+    if _G.noclip then noclip() end
+    if _G.antiRagdoll then antiRagdoll() end
+    if _G.antiVoid then antiVoid() end
+    if _G.antiAFK then antiAFK() end
+    
+    if loopCount % 10 == 0 then
+        if _G.reachExtend then reachExtend() end
     end
 end)
 
@@ -578,5 +673,5 @@ Rayfield:Notify({
 })
 
 print("👊 GILONG Hub - Slap Battles Script Loaded!")
-print("💥 Features: Auto Slap, Kill Aura, Farming, ESP & More!")
-print("🏆 Dominate the arena and collect all gloves!")
+print("💥 Features: Auto Slap, Kill Aura, Anti-Cheat Bypass & More!")
+print("🏆 Dominate the arena safely!")
