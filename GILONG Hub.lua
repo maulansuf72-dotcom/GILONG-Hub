@@ -1,22 +1,22 @@
--- Death Ball - GILONG Hub Script (Fixed & Optimized)
--- Auto Parry System with Advanced Features
+-- Blue Lock Rivals - Ultimate Script Hub
+-- Created by GILONG Hub | All Features Included
 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
-   Name = "GILONG Hub",
+   Name = "GILONG Hub | Blue Lock Rivals",
    Icon = 0,
-   LoadingTitle = "Death Ball Script",
-   LoadingSubtitle = "by GILONG Hub",
-   ShowText = "Rayfield",
-   Theme = "Default",
-   ToggleUIKeybind = Enum.KeyCode.K,
+   LoadingTitle = "Blue Lock Rivals Script",
+   LoadingSubtitle = "Ultimate Soccer Domination",
+   ShowText = "GILONG Hub",
+   Theme = "Ocean",
+   ToggleUIKeybind = Enum.KeyCode.RightControl,
    DisableRayfieldPrompts = false,
    DisableBuildWarnings = false,
    ConfigurationSaving = {
-      Enabled = false,
-      FolderName = nil,
-      FileName = "GILONGHub_DeathBall"
+      Enabled = true,
+      FolderName = "GILONGHub",
+      FileName = "BlueLockRivals_Config"
    },
    Discord = {
       Enabled = false,
@@ -25,21 +25,23 @@ local Window = Rayfield:CreateWindow({
    },
    KeySystem = true,
    KeySettings = {
-      Title = "GILONG Hub | Key",
-      Subtitle = "Key System",
-      Note = "https://link-hub.net/1392772/AfVHcFNYkLMx",
-      FileName = "GILONGHubKey",
-      SaveKey = false,
+      Title = "GILONG Hub | Blue Lock Rivals",
+      Subtitle = "Enter Access Key",
+      Note = "Get your key from: https://link-hub.net/1392772/BlueLockKey",
+      FileName = "GILONGHub_BlueLock",
+      SaveKey = true,
       GrabKeyFromSite = true,
-      Key = {"AyamGoreng!"}
+      Key = {"BlueLockChampion2024!", "SoccerKing123", "GoalMaster456"}
    }
 })
 
--- Tabs
-local mainTab = Window:CreateTab("Auto Parry", nil)
-local combatTab = Window:CreateTab("Combat", nil)
-local visualTab = Window:CreateTab("Visuals", nil)
-local utilityTab = Window:CreateTab("Utility", nil)
+-- Create Tabs
+local ballTab = Window:CreateTab("⚽ Ball Control", nil)
+local movementTab = Window:CreateTab("🏃‍♂️ Movement", nil)
+local shootingTab = Window:CreateTab("🥅 Shooting", nil)
+local playerTab = Window:CreateTab("👥 Players", nil)
+local autoTab = Window:CreateTab("🤖 Automation", nil)
+local utilityTab = Window:CreateTab("🔧 Utility", nil)
 
 -- Services
 local Players = game:GetService("Players")
@@ -47,103 +49,51 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
+local TweenService = game:GetService("TweenService")
 local VirtualUser = game:GetService("VirtualUser")
 
 local player = Players.LocalPlayer
+local mouse = player:GetMouse()
 
 -- Global Variables
-_G.autoParry = false
-_G.parryRange = 20
-_G.parryDelay = 0.1
-_G.humanizedParry = true
+_G.ballMagnet = false
+_G.ballMagnetRange = 15
+_G.autoShoot = false
+_G.perfectAim = false
 _G.ballESP = false
-_G.playerESP = false
-_G.spamAttack = false
-_G.autoDodge = false
+_G.autoSteal = false
 _G.speedBoost = false
-_G.jumpPower = false
-_G.antiRagdoll = false
-_G.speedValue = 50
-_G.jumpValue = 120
+_G.speedValue = 25
+_G.infiniteStamina = false
+_G.autoSprint = false
+_G.teleportToBall = false
+_G.playerESP = false
+_G.teamESP = false
+_G.goalESP = false
+_G.autoPlay = false
+_G.autoDefend = false
+_G.flyHack = false
+_G.flySpeed = 50
+_G.noclip = false
+_G.clickTP = false
+_G.skillSpam = false
 _G.antiAFK = false
+_G.powerShot = false
+_G.autoPass = false
+_G.positionLock = false
 
--- Cooldowns and Timing
-local lastParry = 0
-local parryCooldown = 0.3
-local lastAttack = 0
-local attackCooldown = 0.1
-local lastAFK = 0
-local afkInterval = 30
-
--- ESP Storage
+-- Storage
 local espObjects = {}
+local connections = {}
+local originalValues = {}
 
 -- Utility Functions
 local function safeCall(func, ...)
     local success, result = pcall(func, ...)
     if not success then
-        warn("Error in function: " .. tostring(result))
+        warn("[Blue Lock] Error: " .. tostring(result))
     end
     return success, result
-end
-
-local function getBalls()
-    local balls = {}
-    
-    -- Death Ball specific ball detection
-    for _, obj in pairs(Workspace:GetDescendants()) do
-        if obj:IsA("BasePart") then
-            -- Check for Death Ball specific names and properties
-            local name = obj.Name:lower()
-            if name:find("ball") or name:find("football") or name:find("sphere") or 
-               name == "part" or name == "union" or name == "meshpart" then
-                
-                -- Death Ball balls usually have these properties
-                local hasVelocity = obj:FindFirstChild("BodyVelocity") or 
-                                  obj:FindFirstChild("BodyPosition") or 
-                                  obj:FindFirstChild("BodyAngularVelocity") or
-                                  obj.AssemblyLinearVelocity.Magnitude > 0
-                
-                -- Size check for Death Ball (usually around 4-8 studs)
-                local sizeCheck = obj.Size.Magnitude > 2 and obj.Size.Magnitude < 15
-                
-                -- Material check (Death Ball balls are often Neon or ForceField)
-                local materialCheck = obj.Material == Enum.Material.Neon or 
-                                    obj.Material == Enum.Material.ForceField or
-                                    obj.Material == Enum.Material.Glass
-                
-                -- Color check (Death Ball balls are often bright colors)
-                local colorCheck = obj.Color.R > 0.5 or obj.Color.G > 0.5 or obj.Color.B > 0.5
-                
-                if (hasVelocity or materialCheck or colorCheck) and sizeCheck then
-                    table.insert(balls, obj)
-                end
-            end
-        end
-    end
-    
-    -- Fallback: check Workspace.Balls folder if exists
-    if Workspace:FindFirstChild("Balls") then
-        for _, ball in pairs(Workspace.Balls:GetChildren()) do
-            if ball:IsA("BasePart") then
-                table.insert(balls, ball)
-            end
-        end
-    end
-    
-    -- Another fallback: check for moving parts
-    if #balls == 0 then
-        for _, obj in pairs(Workspace:GetDescendants()) do
-            if obj:IsA("BasePart") and obj.AssemblyLinearVelocity.Magnitude > 10 then
-                local size = obj.Size.Magnitude
-                if size > 2 and size < 15 then
-                    table.insert(balls, obj)
-                end
-            end
-        end
-    end
-    
-    return balls
 end
 
 local function getDistance(part1, part2)
@@ -151,180 +101,301 @@ local function getDistance(part1, part2)
     return (part1.Position - part2.Position).Magnitude
 end
 
-local function predictBallPath(ball, character)
-    if not ball or not character or not character:FindFirstChild("HumanoidRootPart") then 
-        return nil, nil 
-    end
-
-    local velocity = Vector3.new(0, 0, 0)
+local function getBall()
+    -- Multiple ways to find the ball in Blue Lock Rivals
+    local ball = nil
     
-    -- Try multiple ways to get ball velocity (Death Ball specific)
-    if ball:FindFirstChild("BodyVelocity") then
-        velocity = ball.BodyVelocity.Velocity
-    elseif ball:FindFirstChild("BodyPosition") then
-        -- Some Death Ball versions use BodyPosition
-        local bodyPos = ball.BodyPosition
-        local currentPos = ball.Position
-        velocity = (bodyPos.Position - currentPos) * 2 -- Estimate velocity
-    elseif ball.AssemblyLinearVelocity then
-        velocity = ball.AssemblyLinearVelocity
-    elseif ball.Velocity then
-        velocity = ball.Velocity
+    -- Method 1: Check for common ball names
+    for _, obj in pairs(Workspace:GetDescendants()) do
+        if obj:IsA("BasePart") and (
+            obj.Name:lower():find("ball") or
+            obj.Name:lower():find("football") or
+            obj.Name:lower():find("soccer")
+        ) then
+            if obj.Size.Magnitude > 1 and obj.Size.Magnitude < 10 then
+                ball = obj
+                break
+            end
+        end
+    end
+    
+    -- Method 2: Check for moving spherical objects
+    if not ball then
+        for _, obj in pairs(Workspace:GetDescendants()) do
+            if obj:IsA("BasePart") and obj.Shape == Enum.PartType.Ball then
+                if obj.Size.X > 1 and obj.Size.X < 5 then
+                    ball = obj
+                    break
+                end
+            end
+        end
+    end
+    
+    -- Method 3: Check Workspace.Ball or similar folders
+    local ballFolder = Workspace:FindFirstChild("Ball") or Workspace:FindFirstChild("Balls")
+    if ballFolder and not ball then
+        for _, obj in pairs(ballFolder:GetChildren()) do
+            if obj:IsA("BasePart") then
+                ball = obj
+                break
+            end
+        end
+    end
+    
+    return ball
+end
+
+local function getGoals()
+    local goals = {}
+    for _, obj in pairs(Workspace:GetDescendants()) do
+        if obj:IsA("BasePart") and (
+            obj.Name:lower():find("goal") or
+            obj.Name:lower():find("net") or
+            obj.Parent and obj.Parent.Name:lower():find("goal")
+        ) then
+            table.insert(goals, obj)
+        end
+    end
+    return goals
+end
+
+local function getPlayers()
+    local playersList = {}
+    for _, plr in pairs(Players:GetPlayers()) do
+        if plr ~= player and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+            table.insert(playersList, plr)
+        end
+    end
+    return playersList
+end
+
+-- Ball Control Features
+local function ballMagnet()
+    if not _G.ballMagnet then return end
+    
+    local character = player.Character
+    if not character or not character:FindFirstChild("HumanoidRootPart") then return end
+    
+    local ball = getBall()
+    if not ball then return end
+    
+    local distance = getDistance(ball, character.HumanoidRootPart)
+    if distance <= _G.ballMagnetRange then
+        safeCall(function()
+            local direction = (character.HumanoidRootPart.Position - ball.Position).Unit
+            local targetPos = character.HumanoidRootPart.Position + (direction * 3)
+            
+            if ball:FindFirstChild("BodyVelocity") then
+                ball.BodyVelocity.Velocity = direction * 20
+            else
+                local bodyVel = Instance.new("BodyVelocity")
+                bodyVel.MaxForce = Vector3.new(4000, 4000, 4000)
+                bodyVel.Velocity = direction * 20
+                bodyVel.Parent = ball
+                
+                game:GetService("Debris"):AddItem(bodyVel, 0.1)
+            end
+        end)
+    end
+end
+
+local function autoSteal()
+    if not _G.autoSteal then return end
+    
+    local character = player.Character
+    if not character then return end
+    
+    local ball = getBall()
+    if not ball then return end
+    
+    -- Find closest opponent with ball
+    local closestPlayer = nil
+    local closestDistance = math.huge
+    
+    for _, plr in pairs(getPlayers()) do
+        local distance = getDistance(ball, plr.Character.HumanoidRootPart)
+        if distance < 10 and distance < closestDistance then
+            closestDistance = distance
+            closestPlayer = plr
+        end
+    end
+    
+    if closestPlayer then
+        safeCall(function()
+            -- Try to find steal/tackle remotes
+            for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
+                if remote:IsA("RemoteEvent") and (
+                    remote.Name:lower():find("steal") or
+                    remote.Name:lower():find("tackle") or
+                    remote.Name:lower():find("slide")
+                ) then
+                    remote:FireServer()
+                end
+            end
+        end)
+    end
+end
+
+-- Movement Features
+local function applySpeedBoost()
+    local character = player.Character
+    if not character then return end
+    
+    local humanoid = character:FindFirstChild("Humanoid")
+    if not humanoid then return end
+    
+    if _G.speedBoost then
+        humanoid.WalkSpeed = _G.speedValue
     else
-        -- Fallback: calculate velocity from position change
-        if not ball:GetAttribute("LastPosition") then
-            ball:SetAttribute("LastPosition", ball.Position)
-            return nil, nil
-        end
-        
-        local lastPos = ball:GetAttribute("LastPosition")
-        local currentPos = ball.Position
-        velocity = (currentPos - lastPos) * 60 -- Assuming 60 FPS
-        ball:SetAttribute("LastPosition", currentPos)
+        humanoid.WalkSpeed = 16
     end
-
-    if velocity.Magnitude < 5 then return nil, nil end -- Increased minimum velocity
-
-    local playerPos = character.HumanoidRootPart.Position
-    local ballPos = ball.Position
-    local distance = (playerPos - ballPos).Magnitude
-    local timeToReach = distance / math.max(velocity.Magnitude, 1)
-    
-    local predictedPos = ballPos + (velocity * timeToReach)
-    return predictedPos, timeToReach
 end
 
-local function isPlayerFacingBall(character, ball)
-    if not character or not character:FindFirstChild("HumanoidRootPart") or not ball then
-        return false
-    end
+local function infiniteStamina()
+    if not _G.infiniteStamina then return end
     
-    local hrp = character.HumanoidRootPart
-    local ballDirection = (ball.Position - hrp.Position).Unit
-    local lookDirection = hrp.CFrame.LookVector
+    local character = player.Character
+    if not character then return end
     
-    return ballDirection:Dot(lookDirection) > 0.3
-end
-
--- Auto Parry System
-local function performParry()
-    local currentTime = tick()
-    if currentTime - lastParry < parryCooldown then return false end
-    
-    lastParry = currentTime
-    
-    -- Add humanized delay
-    if _G.humanizedParry then
-        local randomDelay = _G.parryDelay + (math.random() * 0.05)
-        task.wait(randomDelay)
-    else
-        task.wait(_G.parryDelay)
-    end
-    
-    -- Try multiple parry methods for Death Ball
+    -- Try to find stamina-related values
     safeCall(function()
-        -- Key press method (F key for parry)
-        UserInputService:SendKeyEvent(true, Enum.KeyCode.F, false, game)
-        task.wait(0.05)
-        UserInputService:SendKeyEvent(false, Enum.KeyCode.F, false, game)
-    end)
-    
-    -- Death Ball specific remote events
-    safeCall(function()
-        for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
-            if remote:IsA("RemoteEvent") then
-                local name = remote.Name:lower()
-                if name:find("parry") or name:find("deflect") or name:find("block") or
-                   name:find("counter") or name:find("reflect") or name == "remote" or
-                   name == "re" or name == "r" or name:find("ball") then
-                    remote:FireServer()
-                    remote:FireServer(true)
-                    remote:FireServer("parry")
-                    remote:FireServer({["parry"] = true})
-                end
+        for _, obj in pairs(character:GetDescendants()) do
+            if obj:IsA("NumberValue") and (
+                obj.Name:lower():find("stamina") or
+                obj.Name:lower():find("energy") or
+                obj.Name:lower():find("endurance")
+            ) then
+                obj.Value = obj.MaxValue or 100
             end
         end
     end)
-    
-    -- Try ReplicatedFirst remotes
-    safeCall(function()
-        local repFirst = game:GetService("ReplicatedFirst")
-        for _, remote in pairs(repFirst:GetDescendants()) do
-            if remote:IsA("RemoteEvent") then
-                local name = remote.Name:lower()
-                if name:find("parry") or name:find("deflect") or name:find("block") then
-                    remote:FireServer()
-                end
-            end
-        end
-    end)
-    
-    -- Try StarterPlayer remotes
-    safeCall(function()
-        local starterPlayer = game:GetService("StarterPlayer")
-        for _, remote in pairs(starterPlayer:GetDescendants()) do
-            if remote:IsA("RemoteEvent") then
-                local name = remote.Name:lower()
-                if name:find("parry") or name:find("deflect") or name:find("block") then
-                    remote:FireServer()
-                end
-            end
-        end
-    end)
-    
-    return true
 end
 
-local function autoParry()
-    if not _G.autoParry then return end
-    
+local function flyHack()
     local character = player.Character
     if not character or not character:FindFirstChild("HumanoidRootPart") then return end
     
     local hrp = character.HumanoidRootPart
     
-    for _, ball in pairs(getBalls()) do
-        local distance = getDistance(ball, hrp)
-        
-        if distance <= _G.parryRange then
-            local predictedPos, timeToReach = predictBallPath(ball, character)
+    if _G.flyHack then
+        if not hrp:FindFirstChild("FlyBodyVelocity") then
+            local bodyVel = Instance.new("BodyVelocity")
+            bodyVel.Name = "FlyBodyVelocity"
+            bodyVel.MaxForce = Vector3.new(4000, 4000, 4000)
+            bodyVel.Velocity = Vector3.new(0, 0, 0)
+            bodyVel.Parent = hrp
             
-            if predictedPos and timeToReach then
-                -- Check if ball is moving towards player (Death Ball specific)
-                local ballToPlayer = (hrp.Position - ball.Position).Unit
-                local ballVelocity = Vector3.new(0, 0, 0)
-                
-                if ball:FindFirstChild("BodyVelocity") then
-                    ballVelocity = ball.BodyVelocity.Velocity
-                elseif ball.AssemblyLinearVelocity then
-                    ballVelocity = ball.AssemblyLinearVelocity
-                elseif ball:GetAttribute("LastPosition") then
-                    local lastPos = ball:GetAttribute("LastPosition")
-                    ballVelocity = (ball.Position - lastPos) * 60
-                end
-                
-                if ballVelocity.Magnitude > 0 then
-                    ballVelocity = ballVelocity.Unit
-                    local dot = ballToPlayer:Dot(ballVelocity)
-                    
-                    -- More lenient parry conditions for Death Ball
-                    local distanceCondition = distance <= _G.parryRange
-                    local velocityCondition = dot > 0.2 -- More lenient angle
-                    local timeCondition = timeToReach < 2 and timeToReach > 0.05
-                    local speedCondition = ballVelocity.Magnitude > 0.1
-                    
-                    if distanceCondition and (velocityCondition or distance < 8) and timeCondition then
-                        if performParry() then
-                            break -- Only parry one ball at a time
-                        end
-                    end
-                end
+            local bodyPos = Instance.new("BodyPosition")
+            bodyPos.Name = "FlyBodyPosition"
+            bodyPos.MaxForce = Vector3.new(4000, 4000, 4000)
+            bodyPos.Position = hrp.Position
+            bodyPos.Parent = hrp
+        end
+        
+        local bodyVel = hrp:FindFirstChild("FlyBodyVelocity")
+        local bodyPos = hrp:FindFirstChild("FlyBodyPosition")
+        
+        if bodyVel and bodyPos then
+            local moveVector = Vector3.new(0, 0, 0)
+            
+            if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+                moveVector = moveVector + (Workspace.CurrentCamera.CFrame.LookVector * _G.flySpeed)
             end
+            if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+                moveVector = moveVector - (Workspace.CurrentCamera.CFrame.LookVector * _G.flySpeed)
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+                moveVector = moveVector - (Workspace.CurrentCamera.CFrame.RightVector * _G.flySpeed)
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+                moveVector = moveVector + (Workspace.CurrentCamera.CFrame.RightVector * _G.flySpeed)
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+                moveVector = moveVector + Vector3.new(0, _G.flySpeed, 0)
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
+                moveVector = moveVector - Vector3.new(0, _G.flySpeed, 0)
+            end
+            
+            bodyVel.Velocity = moveVector
+            bodyPos.Position = hrp.Position + (moveVector * 0.1)
+        end
+    else
+        if hrp:FindFirstChild("FlyBodyVelocity") then
+            hrp.FlyBodyVelocity:Destroy()
+        end
+        if hrp:FindFirstChild("FlyBodyPosition") then
+            hrp.FlyBodyPosition:Destroy()
         end
     end
 end
 
--- ESP System
+-- Shooting Features
+local function autoShoot()
+    if not _G.autoShoot then return end
+    
+    local character = player.Character
+    if not character then return end
+    
+    local ball = getBall()
+    if not ball then return end
+    
+    local distance = getDistance(ball, character.HumanoidRootPart)
+    if distance <= 8 then
+        local goals = getGoals()
+        if #goals > 0 then
+            safeCall(function()
+                -- Try to find shoot remotes
+                for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
+                    if remote:IsA("RemoteEvent") and (
+                        remote.Name:lower():find("shoot") or
+                        remote.Name:lower():find("kick") or
+                        remote.Name:lower():find("shot")
+                    ) then
+                        remote:FireServer()
+                        if _G.powerShot then
+                            remote:FireServer("power")
+                            remote:FireServer(100) -- Max power
+                        end
+                    end
+                end
+            end)
+        end
+    end
+end
+
+local function perfectAim()
+    if not _G.perfectAim then return end
+    
+    local character = player.Character
+    if not character then return end
+    
+    local ball = getBall()
+    local goals = getGoals()
+    
+    if ball and #goals > 0 then
+        local closestGoal = goals[1]
+        local closestDistance = getDistance(ball, closestGoal)
+        
+        for _, goal in pairs(goals) do
+            local distance = getDistance(ball, goal)
+            if distance < closestDistance then
+                closestDistance = distance
+                closestGoal = goal
+            end
+        end
+        
+        -- Aim ball towards goal
+        safeCall(function()
+            local direction = (closestGoal.Position - ball.Position).Unit
+            if ball:FindFirstChild("BodyVelocity") then
+                ball.BodyVelocity.Velocity = direction * 50
+            end
+        end)
+    end
+end
+
+-- ESP Features
 local function clearESP()
     for _, obj in pairs(espObjects) do
         if obj and obj.Parent then
@@ -337,152 +408,158 @@ end
 local function createBallESP()
     if not _G.ballESP then return end
     
-    for _, ball in pairs(getBalls()) do
-        if ball and not ball:FindFirstChild("BallESP") then
-            safeCall(function()
-                local highlight = Instance.new("Highlight")
-                highlight.Name = "BallESP"
-                highlight.Parent = ball
-                highlight.FillColor = Color3.new(1, 0.2, 0.2)
-                highlight.OutlineColor = Color3.new(1, 0, 0)
-                highlight.FillTransparency = 0.5
-                highlight.OutlineTransparency = 0
-                table.insert(espObjects, highlight)
-                
-                -- Distance label
-                local gui = Instance.new("BillboardGui")
-                gui.Name = "BallDistance"
-                gui.Parent = ball
-                gui.Size = UDim2.new(0, 100, 0, 50)
-                gui.StudsOffset = Vector3.new(0, 2, 0)
-                
-                local label = Instance.new("TextLabel")
-                label.Parent = gui
-                label.Size = UDim2.new(1, 0, 1, 0)
-                label.BackgroundTransparency = 1
-                label.Text = "Ball"
-                label.TextColor3 = Color3.new(1, 1, 1)
-                label.TextScaled = true
-                label.Font = Enum.Font.SourceSansBold
-                
-                table.insert(espObjects, gui)
-            end)
-        end
+    local ball = getBall()
+    if ball and not ball:FindFirstChild("BallESP") then
+        safeCall(function()
+            local highlight = Instance.new("Highlight")
+            highlight.Name = "BallESP"
+            highlight.Parent = ball
+            highlight.FillColor = Color3.new(1, 0.5, 0)
+            highlight.OutlineColor = Color3.new(1, 0, 0)
+            highlight.FillTransparency = 0.5
+            highlight.OutlineTransparency = 0
+            table.insert(espObjects, highlight)
+            
+            local gui = Instance.new("BillboardGui")
+            gui.Name = "BallDistance"
+            gui.Parent = ball
+            gui.Size = UDim2.new(0, 100, 0, 50)
+            gui.StudsOffset = Vector3.new(0, 3, 0)
+            
+            local label = Instance.new("TextLabel")
+            label.Parent = gui
+            label.Size = UDim2.new(1, 0, 1, 0)
+            label.BackgroundTransparency = 1
+            label.Text = "⚽ BALL"
+            label.TextColor3 = Color3.new(1, 1, 1)
+            label.TextScaled = true
+            label.Font = Enum.Font.SourceSansBold
+            
+            table.insert(espObjects, gui)
+        end)
     end
 end
 
 local function createPlayerESP()
     if not _G.playerESP then return end
     
-    for _, plr in pairs(Players:GetPlayers()) do
-        if plr ~= player and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
-            local character = plr.Character
-            local hrp = character.HumanoidRootPart
+    for _, plr in pairs(getPlayers()) do
+        local character = plr.Character
+        if character and not character:FindFirstChild("PlayerESP") then
+            safeCall(function()
+                local highlight = Instance.new("Highlight")
+                highlight.Name = "PlayerESP"
+                highlight.Parent = character
+                
+                if _G.teamESP then
+                    -- Different colors for team/enemy (basic implementation)
+                    if plr.TeamColor == player.TeamColor then
+                        highlight.FillColor = Color3.new(0, 1, 0) -- Green for teammates
+                    else
+                        highlight.FillColor = Color3.new(1, 0, 0) -- Red for enemies
+                    end
+                else
+                    highlight.FillColor = Color3.new(0, 0.5, 1) -- Blue for all players
+                end
+                
+                highlight.OutlineColor = Color3.new(1, 1, 1)
+                highlight.FillTransparency = 0.7
+                highlight.OutlineTransparency = 0
+                table.insert(espObjects, highlight)
+                
+                local gui = Instance.new("BillboardGui")
+                gui.Name = "PlayerName"
+                gui.Parent = character.HumanoidRootPart
+                gui.Size = UDim2.new(0, 200, 0, 50)
+                gui.StudsOffset = Vector3.new(0, 3, 0)
+                
+                local label = Instance.new("TextLabel")
+                label.Parent = gui
+                label.Size = UDim2.new(1, 0, 1, 0)
+                label.BackgroundTransparency = 1
+                label.Text = plr.Name
+                label.TextColor3 = Color3.new(1, 1, 1)
+                label.TextScaled = true
+                label.Font = Enum.Font.SourceSansBold
+                
+                table.insert(espObjects, label)
+            end)
+        end
+    end
+end
+
+local function createGoalESP()
+    if not _G.goalESP then return end
+    
+    local goals = getGoals()
+    for _, goal in pairs(goals) do
+        if not goal:FindFirstChild("GoalESP") then
+            safeCall(function()
+                local highlight = Instance.new("Highlight")
+                highlight.Name = "GoalESP"
+                highlight.Parent = goal
+                highlight.FillColor = Color3.new(1, 1, 0)
+                highlight.OutlineColor = Color3.new(1, 0.5, 0)
+                highlight.FillTransparency = 0.3
+                highlight.OutlineTransparency = 0
+                table.insert(espObjects, highlight)
+            end)
+        end
+    end
+end
+
+-- Automation Features
+local function autoPlay()
+    if not _G.autoPlay then return end
+    
+    local character = player.Character
+    if not character then return end
+    
+    local ball = getBall()
+    if not ball then return end
+    
+    local distance = getDistance(ball, character.HumanoidRootPart)
+    
+    -- Basic AI: Move towards ball, shoot when close to goal
+    if distance > 10 then
+        -- Move towards ball
+        local direction = (ball.Position - character.HumanoidRootPart.Position).Unit
+        character.Humanoid:MoveTo(ball.Position)
+    else
+        -- Check if close to goal and shoot
+        local goals = getGoals()
+        if #goals > 0 then
+            local closestGoal = goals[1]
+            local goalDistance = getDistance(character.HumanoidRootPart, closestGoal)
             
-            if not hrp:FindFirstChild("PlayerESP") then
+            if goalDistance < 30 then
+                -- Shoot
                 safeCall(function()
-                    local highlight = Instance.new("Highlight")
-                    highlight.Name = "PlayerESP"
-                    highlight.Parent = character
-                    highlight.FillColor = Color3.new(0.2, 1, 0.2)
-                    highlight.OutlineColor = Color3.new(0, 1, 0)
-                    highlight.FillTransparency = 0.7
-                    highlight.OutlineTransparency = 0
-                    table.insert(espObjects, highlight)
-                    
-                    -- Player name label
-                    local gui = Instance.new("BillboardGui")
-                    gui.Name = "PlayerName"
-                    gui.Parent = hrp
-                    gui.Size = UDim2.new(0, 200, 0, 50)
-                    gui.StudsOffset = Vector3.new(0, 3, 0)
-                    
-                    local label = Instance.new("TextLabel")
-                    label.Parent = gui
-                    label.Size = UDim2.new(1, 0, 1, 0)
-                    label.BackgroundTransparency = 1
-                    label.Text = plr.Name
-                    label.TextColor3 = Color3.new(1, 1, 1)
-                    label.TextScaled = true
-                    label.Font = Enum.Font.SourceSansBold
-                    
-                    table.insert(espObjects, gui)
+                    for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
+                        if remote:IsA("RemoteEvent") and remote.Name:lower():find("shoot") then
+                            remote:FireServer()
+                        end
+                    end
                 end)
             end
         end
     end
 end
 
--- Combat Functions
-local function spamAttack()
-    if not _G.spamAttack then return end
-    
-    local currentTime = tick()
-    if currentTime - lastAttack < attackCooldown then return end
-    
-    lastAttack = currentTime
-    
-    safeCall(function()
-        -- Death Ball specific attack remotes
-        for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
-            if remote:IsA("RemoteEvent") then
-                local name = remote.Name:lower()
-                if name:find("attack") or name:find("swing") or name:find("hit") or
-                   name:find("punch") or name:find("kick") or name:find("shoot") or
-                   name == "remote" or name == "re" or name == "r" then
-                    remote:FireServer()
-                    remote:FireServer("attack")
-                    remote:FireServer(true)
-                end
-            end
-        end
-        
-        -- Try key press for attack (usually Space or Click)
-        UserInputService:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
-        task.wait(0.05)
-        UserInputService:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
-    end)
-end
-
--- Character Enhancements
-local function applyCharacterEnhancements()
+-- Utility Features
+local function noclip()
     local character = player.Character
     if not character then return end
     
-    local humanoid = character:FindFirstChild("Humanoid")
-    if not humanoid then return end
-    
-    safeCall(function()
-        if _G.speedBoost then
-            humanoid.WalkSpeed = _G.speedValue
-        else
-            humanoid.WalkSpeed = 16
+    for _, part in pairs(character:GetDescendants()) do
+        if part:IsA("BasePart") then
+            part.CanCollide = not _G.noclip
         end
-        
-        if _G.jumpPower then
-            if humanoid:FindFirstChild("JumpHeight") then
-                humanoid.JumpHeight = _G.jumpValue
-            else
-                humanoid.JumpPower = _G.jumpValue
-            end
-        else
-            if humanoid:FindFirstChild("JumpHeight") then
-                humanoid.JumpHeight = 7.2
-            else
-                humanoid.JumpPower = 50
-            end
-        end
-    end)
+    end
 end
 
--- Anti-AFK System
 local function antiAFK()
     if not _G.antiAFK then return end
-    
-    local currentTime = tick()
-    if currentTime - lastAFK < afkInterval then return end
-    
-    lastAFK = currentTime
     
     safeCall(function()
         VirtualUser:CaptureController()
@@ -490,134 +567,97 @@ local function antiAFK()
     end)
 end
 
--- Debug function to help identify issues
-local function debugInfo()
-    if not _G.autoParry then return end
-    
-    local balls = getBalls()
-    if #balls > 0 then
-        print("[DEBUG] Found", #balls, "balls")
-        for i, ball in pairs(balls) do
-            print("[DEBUG] Ball", i, ":", ball.Name, "Position:", ball.Position, "Velocity:", ball.AssemblyLinearVelocity.Magnitude)
+-- Click TP
+local function setupClickTP()
+    if _G.clickTP then
+        if not connections.clickTP then
+            connections.clickTP = mouse.Button1Down:Connect(function()
+                local character = player.Character
+                if character and character:FindFirstChild("HumanoidRootPart") then
+                    character.HumanoidRootPart.CFrame = CFrame.new(mouse.Hit.Position + Vector3.new(0, 5, 0))
+                end
+            end)
         end
     else
-        print("[DEBUG] No balls detected")
-    end
-    
-    -- Check for remotes
-    local remoteCount = 0
-    for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
-        if remote:IsA("RemoteEvent") then
-            remoteCount = remoteCount + 1
+        if connections.clickTP then
+            connections.clickTP:Disconnect()
+            connections.clickTP = nil
         end
     end
-    print("[DEBUG] Found", remoteCount, "RemoteEvents in ReplicatedStorage")
 end
 
 -- Main Loop
-local heartbeatConnection
-local debugTimer = 0
-heartbeatConnection = RunService.Heartbeat:Connect(function()
-    safeCall(autoParry)
+local heartbeatConnection = RunService.Heartbeat:Connect(function()
+    safeCall(ballMagnet)
+    safeCall(autoSteal)
+    safeCall(applySpeedBoost)
+    safeCall(infiniteStamina)
+    safeCall(flyHack)
+    safeCall(autoShoot)
+    safeCall(perfectAim)
     safeCall(createBallESP)
     safeCall(createPlayerESP)
-    safeCall(spamAttack)
-    safeCall(applyCharacterEnhancements)
+    safeCall(createGoalESP)
+    safeCall(autoPlay)
+    safeCall(noclip)
     safeCall(antiAFK)
-    
-    -- Debug info every 5 seconds
-    debugTimer = debugTimer + 1
-    if debugTimer >= 300 then -- 60 FPS * 5 seconds
-        debugTimer = 0
-        safeCall(debugInfo)
-    end
-end)
-
--- Cleanup on player leaving
-Players.PlayerRemoving:Connect(function(plr)
-    if plr == player then
-        clearESP()
-        if heartbeatConnection then
-            heartbeatConnection:Disconnect()
-        end
-    end
 end)
 
 -- GUI Elements
-mainTab:CreateToggle({
-   Name = "Auto Parry",
+
+-- Ball Control Tab
+ballTab:CreateToggle({
+   Name = "Ball Magnet",
    CurrentValue = false,
-   Flag = "AutoParry",
+   Flag = "BallMagnet",
    Callback = function(value)
-       _G.autoParry = value
+       _G.ballMagnet = value
    end
 })
 
-mainTab:CreateSlider({
-   Name = "Parry Range",
-   Range = {5, 50},
+ballTab:CreateSlider({
+   Name = "Magnet Range",
+   Range = {5, 30},
    Increment = 1,
-   CurrentValue = 20,
-   Flag = "ParryRange",
+   CurrentValue = 15,
+   Flag = "MagnetRange",
    Callback = function(value)
-       _G.parryRange = value
+       _G.ballMagnetRange = value
    end
 })
 
-mainTab:CreateSlider({
-   Name = "Parry Delay",
-   Range = {0, 0.5},
-   Increment = 0.01,
-   CurrentValue = 0.1,
-   Flag = "ParryDelay",
-   Callback = function(value)
-       _G.parryDelay = value
-   end
-})
-
-mainTab:CreateToggle({
-   Name = "Humanized Parry",
-   CurrentValue = true,
-   Flag = "HumanizedParry",
-   Callback = function(value)
-       _G.humanizedParry = value
-   end
-})
-
-combatTab:CreateToggle({
-   Name = "Spam Attack",
+ballTab:CreateToggle({
+   Name = "Auto Steal",
    CurrentValue = false,
-   Flag = "SpamAttack",
+   Flag = "AutoSteal",
    Callback = function(value)
-       _G.spamAttack = value
+       _G.autoSteal = value
    end
 })
 
-visualTab:CreateToggle({
+ballTab:CreateToggle({
    Name = "Ball ESP",
    CurrentValue = false,
    Flag = "BallESP",
    Callback = function(value)
        _G.ballESP = value
-       if not value then
-           clearESP()
+       if not value then clearESP() end
+   end
+})
+
+ballTab:CreateButton({
+   Name = "Teleport to Ball",
+   Callback = function()
+       local ball = getBall()
+       local character = player.Character
+       if ball and character and character:FindFirstChild("HumanoidRootPart") then
+           character.HumanoidRootPart.CFrame = CFrame.new(ball.Position + Vector3.new(0, 5, 0))
        end
    end
 })
 
-visualTab:CreateToggle({
-   Name = "Player ESP",
-   CurrentValue = false,
-   Flag = "PlayerESP",
-   Callback = function(value)
-       _G.playerESP = value
-       if not value then
-           clearESP()
-       end
-   end
-})
-
-utilityTab:CreateToggle({
+-- Movement Tab
+movementTab:CreateToggle({
    Name = "Speed Boost",
    CurrentValue = false,
    Flag = "SpeedBoost",
@@ -626,39 +666,145 @@ utilityTab:CreateToggle({
    end
 })
 
-utilityTab:CreateSlider({
+movementTab:CreateSlider({
    Name = "Speed Value",
    Range = {16, 100},
    Increment = 1,
-   CurrentValue = 50,
+   CurrentValue = 25,
    Flag = "SpeedValue",
    Callback = function(value)
        _G.speedValue = value
    end
 })
 
-utilityTab:CreateToggle({
-   Name = "Jump Power Boost",
+movementTab:CreateToggle({
+   Name = "Infinite Stamina",
    CurrentValue = false,
-   Flag = "JumpPower",
+   Flag = "InfiniteStamina",
    Callback = function(value)
-       _G.jumpPower = value
+       _G.infiniteStamina = value
    end
 })
 
-utilityTab:CreateSlider({
-   Name = "Jump Value",
-   Range = {50, 200},
-   Increment = 1,
-   CurrentValue = 120,
-   Flag = "JumpValue",
+movementTab:CreateToggle({
+   Name = "Fly Hack",
+   CurrentValue = false,
+   Flag = "FlyHack",
    Callback = function(value)
-       _G.jumpValue = value
+       _G.flyHack = value
+   end
+})
+
+movementTab:CreateSlider({
+   Name = "Fly Speed",
+   Range = {10, 100},
+   Increment = 1,
+   CurrentValue = 50,
+   Flag = "FlySpeed",
+   Callback = function(value)
+       _G.flySpeed = value
+   end
+})
+
+-- Shooting Tab
+shootingTab:CreateToggle({
+   Name = "Auto Shoot",
+   CurrentValue = false,
+   Flag = "AutoShoot",
+   Callback = function(value)
+       _G.autoShoot = value
+   end
+})
+
+shootingTab:CreateToggle({
+   Name = "Perfect Aim",
+   CurrentValue = false,
+   Flag = "PerfectAim",
+   Callback = function(value)
+       _G.perfectAim = value
+   end
+})
+
+shootingTab:CreateToggle({
+   Name = "Power Shot",
+   CurrentValue = false,
+   Flag = "PowerShot",
+   Callback = function(value)
+       _G.powerShot = value
+   end
+})
+
+shootingTab:CreateToggle({
+   Name = "Goal ESP",
+   CurrentValue = false,
+   Flag = "GoalESP",
+   Callback = function(value)
+       _G.goalESP = value
+       if not value then clearESP() end
+   end
+})
+
+-- Player Tab
+playerTab:CreateToggle({
+   Name = "Player ESP",
+   CurrentValue = false,
+   Flag = "PlayerESP",
+   Callback = function(value)
+       _G.playerESP = value
+       if not value then clearESP() end
+   end
+})
+
+playerTab:CreateToggle({
+   Name = "Team ESP",
+   CurrentValue = false,
+   Flag = "TeamESP",
+   Callback = function(value)
+       _G.teamESP = value
+   end
+})
+
+-- Automation Tab
+autoTab:CreateToggle({
+   Name = "Auto Play",
+   CurrentValue = false,
+   Flag = "AutoPlay",
+   Callback = function(value)
+       _G.autoPlay = value
+   end
+})
+
+autoTab:CreateToggle({
+   Name = "Auto Defend",
+   CurrentValue = false,
+   Flag = "AutoDefend",
+   Callback = function(value)
+       _G.autoDefend = value
+   end
+})
+
+-- Utility Tab
+utilityTab:CreateToggle({
+   Name = "Noclip",
+   CurrentValue = false,
+   Flag = "Noclip",
+   Callback = function(value)
+       _G.noclip = value
    end
 })
 
 utilityTab:CreateToggle({
-   Name = "Anti-AFK",
+   Name = "Click TP",
+   CurrentValue = false,
+   Flag = "ClickTP",
+   Callback = function(value)
+       _G.clickTP = value
+       setupClickTP()
+   end
+})
+
+utilityTab:CreateToggle({
+   Name = "Anti AFK",
    CurrentValue = false,
    Flag = "AntiAFK",
    Callback = function(value)
@@ -667,47 +813,43 @@ utilityTab:CreateToggle({
 })
 
 utilityTab:CreateButton({
-   Name = "Debug Info",
+   Name = "Clear All ESP",
    Callback = function()
-       debugInfo()
-       
-       -- Print all RemoteEvents for manual inspection
-       print("=== ALL REMOTE EVENTS ===")
-       for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
-           if remote:IsA("RemoteEvent") then
-               print("Remote:", remote.Name, "Path:", remote:GetFullName())
-           end
-       end
-       print("========================")
+       clearESP()
    end
 })
 
-utilityTab:CreateButton({
-   Name = "Force Parry Test",
-   Callback = function()
-       print("[TEST] Attempting force parry...")
-       performParry()
-       print("[TEST] Force parry completed")
-   end
-})
+-- Cleanup
+Players.PlayerRemoving:Connect(function(plr)
+    if plr == player then
+        clearESP()
+        if heartbeatConnection then
+            heartbeatConnection:Disconnect()
+        end
+        for _, connection in pairs(connections) do
+            if connection then
+                connection:Disconnect()
+            end
+        end
+    end
+end)
 
 -- Notification
 Rayfield:Notify({
    Title = "GILONG Hub Loaded!",
-   Content = "Death Ball Script ready to use ✅",
+   Content = "Blue Lock Rivals Script Ready! ⚽🔥",
    Duration = 5,
    Image = 4483362458,
    Actions = {
       Ignore = {
-         Name = "Okay!",
+         Name = "Let's Dominate!",
          Callback = function()
-            print("Script loaded successfully!")
+            print("Blue Lock Rivals Script Loaded Successfully!")
          end
       },
    },
 })
 
-print("GILONG Hub Death Ball Script loaded successfully!")
-print("[INFO] Use Debug Info button to check ball detection")
-print("[INFO] Use Force Parry Test to test parry function")
-print("[INFO] Auto debug info will print every 5 seconds when Auto Parry is enabled")
+print("🔥 GILONG Hub - Blue Lock Rivals Script Loaded!")
+print("⚽ Features: Ball Control, Auto Shoot, ESP, Fly, Speed Boost & More!")
+print("🎯 Use responsibly and dominate the field!")
