@@ -126,22 +126,35 @@ end
 local function getGloves()
     local gloves = {}
     local character = player.Character
+    
+    -- Check equipped tools
     if character then
         for _, obj in pairs(character:GetChildren()) do
-            if obj:IsA("Tool") and obj.Name:lower():find("glove") then
+            if obj:IsA("Tool") then
                 table.insert(gloves, obj.Name)
             end
         end
     end
     
-    -- Also check backpack
+    -- Check backpack
     for _, obj in pairs(player.Backpack:GetChildren()) do
-        if obj:IsA("Tool") and obj.Name:lower():find("glove") then
+        if obj:IsA("Tool") then
             table.insert(gloves, obj.Name)
         end
     end
     
     return gloves
+end
+
+local function getCurrentGlove()
+    local character = player.Character
+    if character then
+        local tool = character:FindFirstChildOfClass("Tool")
+        if tool then
+            return tool.Name
+        end
+    end
+    return "None"
 end
 
 -- Combat Features
@@ -151,44 +164,68 @@ local function autoSlap()
     local character = player.Character
     if not character or not character:FindFirstChild("HumanoidRootPart") then return end
     
-    local target = nil
-    if _G.autoTarget then
-        if _G.targetMode == "nearest" then
-            target = getClosestPlayer()
-        elseif targetPlayer and targetPlayer.Character then
-            target = targetPlayer
-        end
-    else
-        target = getClosestPlayer()
-    end
+    local target = getClosestPlayer()
     
     if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
         local distance = getDistance(character.HumanoidRootPart, target.Character.HumanoidRootPart)
         
         if distance <= _G.slapRange then
             safeCall(function()
-                -- Method 1: Mouse click simulation
-                VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 1)
-                task.wait(0.05)
-                VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 1)
-                
-                -- Method 2: Try to find slap remotes
-                for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
-                    if remote:IsA("RemoteEvent") then
-                        local name = remote.Name:lower()
-                        if name:find("slap") or name:find("hit") or name:find("attack") or
-                           name == "b" or name == "remote" or name == "re" then
-                            remote:FireServer()
-                            remote:FireServer(target.Character)
-                            remote:FireServer({target = target.Character})
+                -- Method 1: Direct tool activation (most reliable)
+                local tool = character:FindFirstChildOfClass("Tool")
+                if tool then
+                    tool:Activate()
+                    
+                    -- Also try firing tool's remotes
+                    for _, obj in pairs(tool:GetDescendants()) do
+                        if obj:IsA("RemoteEvent") then
+                            obj:FireServer()
+                            obj:FireServer(target.Character.HumanoidRootPart)
                         end
                     end
                 end
                 
-                -- Method 3: Tool activation
-                local tool = character:FindFirstChildOfClass("Tool")
-                if tool and tool:FindFirstChild("Handle") then
-                    tool:Activate()
+                -- Method 2: Mouse simulation with proper coordinates
+                local camera = Workspace.CurrentCamera
+                local targetPos = camera:WorldToScreenPoint(target.Character.HumanoidRootPart.Position)
+                VirtualInputManager:SendMouseButtonEvent(targetPos.X, targetPos.Y, 0, true, game, 1)
+                task.wait(0.02)
+                VirtualInputManager:SendMouseButtonEvent(targetPos.X, targetPos.Y, 0, false, game, 1)
+                
+                -- Method 3: Try common Slap Battles remotes (improved detection)
+                for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
+                    if remote:IsA("RemoteEvent") then
+                        local name = remote.Name:lower()
+                        if name == "b" or name == "slap" or name == "hit" or name == "swing" or
+                           name == "remote" or name:find("glove") or name:find("attack") or
+                           name:len() == 1 then -- Single letter remotes are common
+                            pcall(function()
+                                remote:FireServer()
+                                remote:FireServer(target.Character)
+                                remote:FireServer(target.Character.HumanoidRootPart)
+                                remote:FireServer({Target = target.Character})
+                                remote:FireServer(target.Character.HumanoidRootPart.Position)
+                                remote:FireServer("Slap")
+                            end)
+                        end
+                    end
+                end
+                
+                -- Method 4: Try StarterPlayer remotes
+                for _, remote in pairs(game:GetService("StarterPlayer"):GetDescendants()) do
+                    if remote:IsA("RemoteEvent") and remote.Name:lower():find("slap") then
+                        pcall(function()
+                            remote:FireServer(target.Character)
+                        end)
+                    end
+                end
+                
+                -- Method 5: Key simulation (multiple keys)
+                local keys = {Enum.KeyCode.E, Enum.KeyCode.F, Enum.KeyCode.Q, Enum.KeyCode.R}
+                for _, key in pairs(keys) do
+                    UserInputService:SendKeyEvent(true, key, false, game)
+                    task.wait(0.01)
+                    UserInputService:SendKeyEvent(false, key, false, game)
                 end
             end)
         end
@@ -207,18 +244,32 @@ local function killAura()
             
             if distance <= _G.auraRange then
                 safeCall(function()
-                    -- Auto slap all players in range
-                    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 1)
-                    task.wait(0.02)
-                    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 1)
+                    -- Method 1: Tool activation
+                    local tool = character:FindFirstChildOfClass("Tool")
+                    if tool then
+                        tool:Activate()
+                    end
                     
-                    -- Try remotes
+                    -- Method 2: Mouse click with target position
+                    local camera = Workspace.CurrentCamera
+                    local targetPos = camera:WorldToScreenPoint(plr.Character.HumanoidRootPart.Position)
+                    VirtualInputManager:SendMouseButtonEvent(targetPos.X, targetPos.Y, 0, true, game, 1)
+                    task.wait(0.01)
+                    VirtualInputManager:SendMouseButtonEvent(targetPos.X, targetPos.Y, 0, false, game, 1)
+                    
+                    -- Method 3: Try remotes with multiple parameters
                     for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
-                        if remote:IsA("RemoteEvent") and remote.Name:lower():find("slap") then
-                            remote:FireServer(plr.Character)
+                        if remote:IsA("RemoteEvent") then
+                            local name = remote.Name:lower()
+                            if name == "b" or name:find("slap") or name:find("hit") then
+                                remote:FireServer()
+                                remote:FireServer(plr.Character)
+                                remote:FireServer(plr.Character.HumanoidRootPart)
+                            end
                         end
                     end
                 end)
+                task.wait(0.05) -- Small delay between targets
             end
         end
     end
@@ -234,17 +285,39 @@ local function reachExtend()
     if tool and tool:FindFirstChild("Handle") then
         safeCall(function()
             local handle = tool.Handle
-            local originalSize = handle.Size
             
-            -- Extend reach by increasing handle size
+            -- Store original values if not already stored
+            if not originalValues[handle] then
+                originalValues[handle] = {
+                    Size = handle.Size,
+                    Transparency = handle.Transparency
+                }
+            end
+            
+            -- Extend reach by modifying handle properties
             handle.Size = Vector3.new(_G.reachDistance, _G.reachDistance, _G.reachDistance)
-            handle.Transparency = 1
+            handle.Transparency = 0.8
+            handle.CanCollide = false
             
-            -- Reset after short time
-            task.wait(0.1)
-            handle.Size = originalSize
-            handle.Transparency = 0
+            -- Also try to modify tool's reach property if it exists
+            if tool:FindFirstChild("Reach") then
+                tool.Reach.Value = _G.reachDistance
+            end
         end)
+    end
+end
+
+local function resetReach()
+    local character = player.Character
+    if not character then return end
+    
+    local tool = character:FindFirstChildOfClass("Tool")
+    if tool and tool:FindFirstChild("Handle") then
+        local handle = tool.Handle
+        if originalValues[handle] then
+            handle.Size = originalValues[handle].Size
+            handle.Transparency = originalValues[handle].Transparency
+        end
     end
 end
 
@@ -258,32 +331,48 @@ local function autoFarm()
     if _G.farmSlaps then
         -- Find players to farm slaps from
         local target = getClosestPlayer()
-        if target and target.Character then
+        if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
             local distance = getDistance(character.HumanoidRootPart, target.Character.HumanoidRootPart)
             
-            if distance > 15 then
-                -- Move closer to target
-                character.Humanoid:MoveTo(target.Character.HumanoidRootPart.Position)
-            else
-                -- Slap target
-                autoSlap()
+            if distance > _G.slapRange then
+                -- Move closer to target using pathfinding
+                safeCall(function()
+                    local path = PathfindingService:CreatePath({
+                        AgentRadius = 2,
+                        AgentHeight = 5,
+                        AgentCanJump = true
+                    })
+                    
+                    path:ComputeAsync(character.HumanoidRootPart.Position, target.Character.HumanoidRootPart.Position)
+                    local waypoints = path:GetWaypoints()
+                    
+                    if #waypoints > 1 then
+                        character.Humanoid:MoveTo(waypoints[2].Position)
+                    else
+                        character.Humanoid:MoveTo(target.Character.HumanoidRootPart.Position)
+                    end
+                end)
             end
         end
     end
     
-    -- Auto collect items/badges
+    -- Auto collect items/badges with better detection
     if _G.autoBadge then
         safeCall(function()
             for _, obj in pairs(Workspace:GetDescendants()) do
-                if obj:IsA("BasePart") and (
+                if obj:IsA("BasePart") and obj.Parent and (
                     obj.Name:lower():find("badge") or
                     obj.Name:lower():find("orb") or
-                    obj.Name:lower():find("collect")
+                    obj.Name:lower():find("collect") or
+                    obj.Name:lower():find("coin") or
+                    obj.Name:lower():find("pickup") or
+                    (obj.BrickColor == BrickColor.new("Bright yellow") and obj.Shape == Enum.PartType.Ball)
                 ) then
                     local distance = getDistance(obj, character.HumanoidRootPart)
-                    if distance < 50 then
-                        character.HumanoidRootPart.CFrame = CFrame.new(obj.Position)
-                        task.wait(0.1)
+                    if distance < 100 and distance > 5 then
+                        character.HumanoidRootPart.CFrame = CFrame.new(obj.Position + Vector3.new(0, 2, 0))
+                        task.wait(0.2)
+                        break
                     end
                 end
             end
@@ -316,13 +405,21 @@ local function flyHack()
         if not hrp:FindFirstChild("FlyBodyVelocity") then
             local bodyVel = Instance.new("BodyVelocity")
             bodyVel.Name = "FlyBodyVelocity"
-            bodyVel.MaxForce = Vector3.new(4000, 4000, 4000)
+            bodyVel.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
             bodyVel.Velocity = Vector3.new(0, 0, 0)
             bodyVel.Parent = hrp
+            
+            local bodyPos = Instance.new("BodyPosition")
+            bodyPos.Name = "FlyBodyPosition"
+            bodyPos.MaxForce = Vector3.new(4000, 4000, 4000)
+            bodyPos.Position = hrp.Position
+            bodyPos.Parent = hrp
         end
         
         local bodyVel = hrp:FindFirstChild("FlyBodyVelocity")
-        if bodyVel then
+        local bodyPos = hrp:FindFirstChild("FlyBodyPosition")
+        
+        if bodyVel and bodyPos then
             local moveVector = Vector3.new(0, 0, 0)
             
             if UserInputService:IsKeyDown(Enum.KeyCode.W) then
@@ -345,10 +442,14 @@ local function flyHack()
             end
             
             bodyVel.Velocity = moveVector
+            bodyPos.Position = hrp.Position + (moveVector * 0.1)
         end
     else
         if hrp:FindFirstChild("FlyBodyVelocity") then
             hrp.FlyBodyVelocity:Destroy()
+        end
+        if hrp:FindFirstChild("FlyBodyPosition") then
+            hrp.FlyBodyPosition:Destroy()
         end
     end
 end
@@ -370,33 +471,40 @@ end
 
 -- Visual Features
 local function createPlayerESP()
-    if not _G.playerESP then return end
+    if not _G.playerESP then 
+        clearESP()
+        return 
+    end
     
     for _, plr in pairs(Players:GetPlayers()) do
-        if plr ~= player and plr.Character and not plr.Character:FindFirstChild("PlayerESP") then
+        if plr ~= player and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") and not plr.Character:FindFirstChild("PlayerESP") then
             safeCall(function()
                 local highlight = Instance.new("Highlight")
                 highlight.Name = "PlayerESP"
                 highlight.Parent = plr.Character
-                highlight.FillColor = Color3.new(1, 0, 0)
+                highlight.FillColor = Color3.new(1, 0.2, 0.2)
                 highlight.OutlineColor = Color3.new(1, 1, 1)
-                highlight.FillTransparency = 0.7
+                highlight.FillTransparency = 0.6
+                highlight.OutlineTransparency = 0
                 table.insert(espObjects, highlight)
                 
                 local gui = Instance.new("BillboardGui")
                 gui.Name = "PlayerName"
                 gui.Parent = plr.Character.HumanoidRootPart
                 gui.Size = UDim2.new(0, 200, 0, 50)
-                gui.StudsOffset = Vector3.new(0, 3, 0)
+                gui.StudsOffset = Vector3.new(0, 4, 0)
+                gui.AlwaysOnTop = true
                 
                 local label = Instance.new("TextLabel")
                 label.Parent = gui
                 label.Size = UDim2.new(1, 0, 1, 0)
                 label.BackgroundTransparency = 1
-                label.Text = plr.Name
+                label.Text = plr.Name .. " [" .. math.floor(getDistance(player.Character.HumanoidRootPart, plr.Character.HumanoidRootPart)) .. "m]"
                 label.TextColor3 = Color3.new(1, 1, 1)
                 label.TextScaled = true
                 label.Font = Enum.Font.SourceSansBold
+                label.TextStrokeTransparency = 0
+                label.TextStrokeColor3 = Color3.new(0, 0, 0)
                 
                 table.insert(espObjects, gui)
             end)
@@ -444,8 +552,28 @@ local function antiVoid()
     local character = player.Character
     if not character or not character:FindFirstChild("HumanoidRootPart") then return end
     
-    if character.HumanoidRootPart.Position.Y < -100 then
-        character.HumanoidRootPart.CFrame = CFrame.new(0, 50, 0)
+    local hrp = character.HumanoidRootPart
+    if hrp.Position.Y < -50 then
+        -- Find a safe spawn point
+        local spawnPoints = {
+            Vector3.new(0, 50, 0),
+            Vector3.new(100, 50, 0),
+            Vector3.new(-100, 50, 0),
+            Vector3.new(0, 50, 100),
+            Vector3.new(0, 50, -100)
+        }
+        
+        -- Try to find the main arena/platform
+        local safestPoint = spawnPoints[1]
+        for _, obj in pairs(Workspace:GetChildren()) do
+            if obj:IsA("BasePart") and obj.Size.X > 50 and obj.Size.Z > 50 and obj.Position.Y > 0 then
+                safestPoint = obj.Position + Vector3.new(0, 10, 0)
+                break
+            end
+        end
+        
+        hrp.CFrame = CFrame.new(safestPoint)
+        hrp.Velocity = Vector3.new(0, 0, 0)
     end
 end
 
@@ -475,9 +603,18 @@ local function autoEquip()
     local character = player.Character
     if not character then return end
     
+    -- Check if already equipped
+    local currentTool = character:FindFirstChildOfClass("Tool")
+    if currentTool and currentTool.Name == _G.selectedGlove then
+        return
+    end
+    
+    -- Try to equip from backpack
     for _, tool in pairs(player.Backpack:GetChildren()) do
         if tool:IsA("Tool") and tool.Name == _G.selectedGlove then
-            character.Humanoid:EquipTool(tool)
+            safeCall(function()
+                character.Humanoid:EquipTool(tool)
+            end)
             break
         end
     end
@@ -522,7 +659,11 @@ heartbeatConnection = RunService.Heartbeat:Connect(function()
     if frameCount % 2 == 0 then
         safeCall(autoSlap)
         safeCall(killAura)
-        safeCall(reachExtend)
+        if _G.reachExtend then
+            safeCall(reachExtend)
+        else
+            safeCall(resetReach)
+        end
         safeCall(autoFarm)
     end
     
@@ -747,7 +888,81 @@ utilityTab:CreateButton({
 utilityTab:CreateButton({
    Name = "Respawn",
    Callback = function()
-       player.Character.Humanoid.Health = 0
+       safeCall(function()
+           if player.Character and player.Character:FindFirstChild("Humanoid") then
+               player.Character.Humanoid.Health = 0
+           end
+       end)
+   end
+})
+
+utilityTab:CreateButton({
+   Name = "Debug Info",
+   Callback = function()
+       local character = player.Character
+       if character then
+           print("[DEBUG] Current Glove:", getCurrentGlove())
+           print("[DEBUG] Available Gloves:", table.concat(getGloves(), ", "))
+           
+           local tool = character:FindFirstChildOfClass("Tool")
+           if tool then
+               print("[DEBUG] Tool Name:", tool.Name)
+               print("[DEBUG] Tool Children:")
+               for _, child in pairs(tool:GetChildren()) do
+                   print("  -", child.Name, child.ClassName)
+               end
+           end
+           
+           print("[DEBUG] RemoteEvents found:")
+           local count = 0
+           for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
+               if remote:IsA("RemoteEvent") then
+                   count = count + 1
+                   if count <= 10 then -- Limit output
+                       print("  -", remote.Name, remote:GetFullName())
+                   end
+               end
+           end
+           print("[DEBUG] Total RemoteEvents:", count)
+       end
+   end
+})
+
+utilityTab:CreateButton({
+   Name = "Test Slap",
+   Callback = function()
+       print("[TEST] Testing slap function...")
+       local oldValue = _G.autoSlap
+       _G.autoSlap = true
+       autoSlap()
+       _G.autoSlap = oldValue
+       print("[TEST] Slap test completed")
+   end
+})
+
+utilityTab:CreateButton({
+   Name = "Force Equip Default",
+   Callback = function()
+       local character = player.Character
+       if character then
+           for _, tool in pairs(player.Backpack:GetChildren()) do
+               if tool:IsA("Tool") and (tool.Name == "Default" or tool.Name:lower():find("default")) then
+                   character.Humanoid:EquipTool(tool)
+                   print("[INFO] Equipped:", tool.Name)
+                   break
+               end
+           end
+       end
+   end
+})
+
+utilityTab:CreateButton({
+   Name = "Teleport to Arena Center",
+   Callback = function()
+       local character = player.Character
+       if character and character:FindFirstChild("HumanoidRootPart") then
+           character.HumanoidRootPart.CFrame = CFrame.new(0, 50, 0)
+       end
    end
 })
 
