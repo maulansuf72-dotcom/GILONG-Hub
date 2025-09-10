@@ -276,149 +276,42 @@ local function updateHP()
     end
 end
 
--- Working Slap Battles Hit System
-local hitboxParts = {}
-
-local function createHitbox()
-    if not _G.reachHack then return end
-    
+-- Simple Working Hitbox System
+local function expandGlove()
     local character = player.Character
     if not character then return end
     
     local tool = character:FindFirstChildOfClass("Tool")
-    if tool and tool:FindFirstChild("Handle") then
-        local handle = tool.Handle
-        
-        -- Store original size
-        if not originalValues[tool.Name] then
-            originalValues[tool.Name] = {
-                size = handle.Size,
-                transparency = handle.Transparency
-            }
-        end
-        
-        -- HP Glove specific handling
-        local toolName = tool.Name:lower()
-        local isHPGlove = toolName:find("hp") or toolName:find("health") or toolName:find("heal")
-        
-        if isHPGlove then
-            -- HP glove needs larger hitbox for better healing range
-            handle.Size = Vector3.new(_G.reachSize * 1.5, _G.reachSize * 1.5, _G.reachSize * 1.5)
-            handle.Transparency = 0.3 -- More visible for HP glove
-        else
-            -- Regular gloves
-            handle.Size = Vector3.new(_G.reachSize, _G.reachSize, _G.reachSize)
-            handle.Transparency = 0.5
-        end
-        
-        handle.CanCollide = false
-    end
+    if not tool or not tool:FindFirstChild("Handle") then return end
+    
+    local handle = tool.Handle
+    
+    -- Simple size expansion
+    handle.Size = Vector3.new(50, 50, 50)
+    handle.Transparency = 0.8
+    handle.CanCollide = false
+    handle.Material = Enum.Material.ForceField
 end
 
-local function resetHitbox()
+local function basicHit(target)
+    if not target or not target.Character then return end
+    
     local character = player.Character
     if not character then return end
     
+    -- Simple tool activation
     local tool = character:FindFirstChildOfClass("Tool")
-    if tool and tool:FindFirstChild("Handle") and originalValues[tool.Name] then
-        local handle = tool.Handle
-        local original = originalValues[tool.Name]
-        
-        handle.Size = original.size
-        handle.Transparency = original.transparency
+    if tool then
+        tool:Activate()
     end
-end
-
-local function performHit(target)
-    if not target or not target.Character then return false end
     
-    local character = player.Character
-    if not character then return false end
-    
-    safeCall(function()
-        local tool = character:FindFirstChildOfClass("Tool")
-        if tool then
-            local toolName = tool.Name:lower()
-            local isHPGlove = toolName:find("hp") or toolName:find("health") or toolName:find("heal")
-            
-            -- Multiple activation methods
-            tool:Activate()
-            
-            -- HP Glove specific activation
-            if isHPGlove then
-                -- HP glove needs multiple activations for healing
-                task.wait(0.05)
-                tool:Activate()
-                task.wait(0.05)
-                tool:Activate()
-            end
-            
-            -- Fire tool remotes with target
-            for _, obj in pairs(tool:GetDescendants()) do
-                if obj:IsA("RemoteEvent") then
-                    pcall(function()
-                        obj:FireServer(target.Character.HumanoidRootPart)
-                        obj:FireServer(target.Character)
-                        
-                        -- HP glove specific parameters
-                        if isHPGlove then
-                            obj:FireServer(target.Character.Humanoid)
-                            obj:FireServer("heal")
-                            obj:FireServer({action = "heal", target = target.Character})
-                        end
-                    end)
-                end
-            end
+    -- Fire the main remote
+    for _, v in pairs(ReplicatedStorage:GetDescendants()) do
+        if v:IsA("RemoteEvent") and v.Name == "b" then
+            v:FireServer()
+            break
         end
-        
-        -- Mouse/Touch targeting
-        local camera = Workspace.CurrentCamera
-        if camera and target.Character.HumanoidRootPart then
-            local targetPos = camera:WorldToScreenPoint(target.Character.HumanoidRootPart.Position)
-            if targetPos.Z > 0 then
-                if isMobile then
-                    -- Mobile touch simulation
-                    VirtualInputManager:SendTouchEvent(Enum.UserInputType.Touch, Enum.UserInputState.Begin, Vector3.new(targetPos.X, targetPos.Y, 0))
-                    task.wait(0.1)
-                    VirtualInputManager:SendTouchEvent(Enum.UserInputType.Touch, Enum.UserInputState.End, Vector3.new(targetPos.X, targetPos.Y, 0))
-                else
-                    -- PC mouse simulation
-                    VirtualInputManager:SendMouseButtonEvent(targetPos.X, targetPos.Y, 0, true, game, 1)
-                    task.wait(0.1)
-                    VirtualInputManager:SendMouseButtonEvent(targetPos.X, targetPos.Y, 0, false, game, 1)
-                end
-            end
-        end
-        
-        -- Global remotes
-        for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
-            if remote:IsA("RemoteEvent") then
-                local name = remote.Name:lower()
-                if name == "b" or name == "slap" or name:find("hit") or name:find("heal") then
-                    pcall(function()
-                        remote:FireServer(target.Character.HumanoidRootPart)
-                        remote:FireServer(target.Character)
-                        remote:FireServer()
-                    end)
-                end
-            end
-        end
-        
-        -- Key/Touch simulation
-        if isMobile then
-            -- Mobile specific input simulation
-            VirtualUser:CaptureController()
-            VirtualUser:ClickButton2(Vector2.new(0, 0))
-        else
-            -- PC input simulation
-            VirtualUser:TypeText(" ")
-            VirtualUser:Button1Down(Vector2.new(0, 0))
-            task.wait(0.1)
-            VirtualUser:Button1Up(Vector2.new(0, 0))
-        end
-    end)
-    
-    return true
+    end
 end
 
 -- Combat Features
@@ -443,9 +336,8 @@ local function autoSlap()
                 task.wait(getHumanizedDelay())
             end
             
-            if performHit(target) then
-                addSlapToHistory()
-            end
+            basicHit(target)
+            addSlapToHistory()
         end
     end
 end
@@ -473,10 +365,9 @@ local function killAura()
                 
                 task.wait(getHumanizedDelay())
                 
-                if performHit(plr) then
-                    addSlapToHistory()
-                    targetsHit = targetsHit + 1
-                end
+                basicHit(plr)
+                addSlapToHistory()
+                targetsHit = targetsHit + 1
                 
                 task.wait(math.random(100, 300) / 1000)
             end
@@ -678,14 +569,11 @@ CombatTab:CreateToggle({
     Callback = function(Value)
         _G.reachHack = Value
         if Value then
-            createHitbox()
             Rayfield:Notify({
                 Title = "Hitbox Expander Enabled",
-                Content = "Mobile & PC compatible! Works with all gloves including HP.",
+                Content = "Simple hitbox expansion active!",
                 Duration = 3,
             })
-        else
-            resetHitbox()
         end
     end,
 })
@@ -873,40 +761,23 @@ DebugTab:CreateParagraph({Title = "Bypass Info", Content = "Humanized slapping u
 DebugTab:CreateParagraph({Title = "Reach System", Content = "Reach Hack extends your tool's reach by making it bigger and adding invisible parts. More reliable than hitbox expansion."})
 
 DebugTab:CreateButton({
-    Name = "Test Hitbox",
+    Name = "Test Hit",
     Callback = function()
         local target = getClosestPlayer()
         if target then
-            local character = player.Character
-            local tool = character and character:FindFirstChildOfClass("Tool")
-            local toolName = tool and tool.Name or "Unknown"
-            local isHPGlove = toolName:lower():find("hp") or toolName:lower():find("health") or toolName:lower():find("heal")
-            
-            local success = performHit(target)
+            basicHit(target)
             Rayfield:Notify({
-                Title = "Hitbox Test",
-                Content = "Testing " .. toolName .. (isHPGlove and " (HP Glove)" or "") .. " on " .. target.Name,
-                Duration = 3,
+                Title = "Hit Test",
+                Content = "Testing hit on " .. target.Name,
+                Duration = 2,
             })
         else
             Rayfield:Notify({
-                Title = "Hitbox Test",
-                Content = "No players nearby to test",
+                Title = "Hit Test",
+                Content = "No players nearby",
                 Duration = 2,
             })
         end
-    end,
-})
-
-DebugTab:CreateButton({
-    Name = "Reset Hitbox",
-    Callback = function()
-        resetHitbox()
-        Rayfield:Notify({
-            Title = "Hitbox Reset",
-            Content = "Hitbox reset to original size",
-            Duration = 2,
-        })
     end,
 })
 
@@ -1013,8 +884,8 @@ RunService.Heartbeat:Connect(function()
     
     if loopCount % 5 == 0 then
         if _G.reachExtend then reachExtend() end
-        if _G.reachHack and loopCount % 10 == 0 then
-            createHitbox()
+        if _G.reachHack and loopCount % 30 == 0 then
+            expandGlove()
         end
     end
 end)
