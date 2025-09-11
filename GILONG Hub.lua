@@ -7,7 +7,7 @@ local Window = Rayfield:CreateWindow({
    Name = "GILONG Hub | Slap Battles",
    Icon = 0,
    LoadingTitle = "Slap Battles Script",
-   LoadingSubtitle = "Ultimate Slapping Domination",
+   LoadingSubtitle = "BY RYXu",
    ShowText = "GILONG Hub",
    Theme = "Amethyst",
    ToggleUIKeybind = Enum.KeyCode.RightControl,
@@ -1021,3 +1021,4 @@ Rayfield:Notify({
 print("👊 GILONG Hub - Slap Battles Script Loaded!")
 print("💥 Features: Auto Slap, Kill Aura, Anti-Cheat Bypass & More!")
 print("🏆 Dominate the arena safely!")
+
