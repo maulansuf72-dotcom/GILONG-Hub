@@ -7,7 +7,7 @@ local Window = Rayfield:CreateWindow({
    Name = "GILONG Hub | Slap Battles",
    Icon = 0,
    LoadingTitle = "Slap Battles Script",
-   LoadingSubtitle = "BY RYXu",
+   LoadingSubtitle = "Ultimate Slapping Domination",
    ShowText = "GILONG Hub",
    Theme = "Amethyst",
    ToggleUIKeybind = Enum.KeyCode.RightControl,
@@ -276,42 +276,86 @@ local function updateHP()
     end
 end
 
--- Enhanced ESP + Click TP System
+-- Enhanced ESP + Click TP System with Visible Highlights
 local mouse = player:GetMouse()
 local espConnections = {}
+local playerJoinConnection
+local playerLeaveConnection
 
--- Add ESP to character
+-- Add ESP to character with multiple visual methods
 local function addESP(char)
     if not char or not _G.esp then return end
     
-    -- Remove existing highlight
+    -- Remove existing ESP elements
     local existingHighlight = char:FindFirstChild("ESP_Highlight")
-    if existingHighlight then
-        existingHighlight:Destroy()
-    end
+    local existingBox = char:FindFirstChild("ESP_SelectionBox")
+    local existingBillboard = char:FindFirstChild("ESP_Billboard")
     
-    -- Create new highlight
+    if existingHighlight then existingHighlight:Destroy() end
+    if existingBox then existingBox:Destroy() end
+    if existingBillboard then existingBillboard:Destroy() end
+    
+    -- Method 1: Highlight (Modern Roblox)
     local highlight = Instance.new("Highlight")
     highlight.Name = "ESP_Highlight"
     highlight.Parent = char
     highlight.Adornee = char
-    highlight.FillColor = Color3.fromRGB(0, 255, 0) -- Green
-    highlight.OutlineColor = Color3.fromRGB(255, 255, 255) -- White outline
-    highlight.FillTransparency = 0.5
+    highlight.FillColor = Color3.fromRGB(0, 255, 100) -- Bright green
+    highlight.OutlineColor = Color3.fromRGB(255, 0, 0) -- Red outline
+    highlight.FillTransparency = 0.3
     highlight.OutlineTransparency = 0
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    
+    -- Method 2: SelectionBox (Fallback for older clients)
+    local selectionBox = Instance.new("SelectionBox")
+    selectionBox.Name = "ESP_SelectionBox"
+    selectionBox.Parent = char
+    selectionBox.Adornee = char
+    selectionBox.Color3 = Color3.fromRGB(255, 0, 0) -- Red
+    selectionBox.LineThickness = 0.2
+    selectionBox.Transparency = 0
+    
+    -- Method 3: Billboard with name (Always visible)
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "ESP_Billboard"
+    billboard.Parent = char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart")
+    billboard.Size = UDim2.new(0, 200, 0, 50)
+    billboard.StudsOffset = Vector3.new(0, 3, 0)
+    billboard.AlwaysOnTop = true
+    
+    local nameLabel = Instance.new("TextLabel")
+    nameLabel.Parent = billboard
+    nameLabel.Size = UDim2.new(1, 0, 1, 0)
+    nameLabel.BackgroundTransparency = 1
+    nameLabel.Text = Players:GetPlayerFromCharacter(char).Name
+    nameLabel.TextColor3 = Color3.fromRGB(255, 255, 0) -- Yellow text
+    nameLabel.TextScaled = true
+    nameLabel.Font = Enum.Font.GothamBold
+    nameLabel.TextStrokeTransparency = 0
+    nameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
 end
 
 -- Remove ESP from character
 local function removeESPFromChar(char)
     if char then
         local highlight = char:FindFirstChild("ESP_Highlight")
-        if highlight then
-            highlight:Destroy()
+        local selectionBox = char:FindFirstChild("ESP_SelectionBox")
+        local billboard = char:FindFirstChild("ESP_Billboard")
+        
+        if highlight then highlight:Destroy() end
+        if selectionBox then selectionBox:Destroy() end
+        if billboard then billboard:Destroy() end
+        
+        -- Also check head for billboard
+        local head = char:FindFirstChild("Head")
+        if head then
+            local headBillboard = head:FindFirstChild("ESP_Billboard")
+            if headBillboard then headBillboard:Destroy() end
         end
     end
 end
 
--- Setup ESP for all players
+-- Setup ESP for all players with auto-refresh
 local function setupESP()
     if not _G.esp then return end
     
@@ -321,7 +365,7 @@ local function setupESP()
             addESP(plr.Character)
         end
         
-        -- Connect to new characters
+        -- Connect to new characters (respawn)
         if not espConnections[plr] then
             espConnections[plr] = plr.CharacterAdded:Connect(function(char)
                 if plr ~= player and _G.esp then
@@ -330,6 +374,45 @@ local function setupESP()
                 end
             end)
         end
+    end
+    
+    -- Setup auto-refresh for new players joining
+    if not playerJoinConnection then
+        playerJoinConnection = Players.PlayerAdded:Connect(function(newPlayer)
+            if _G.esp and newPlayer ~= player then
+                -- Wait for character to spawn
+                newPlayer.CharacterAdded:Connect(function(char)
+                    if _G.esp then
+                        task.wait(1)
+                        addESP(char)
+                    end
+                end)
+                
+                -- If character already exists
+                if newPlayer.Character then
+                    task.wait(1)
+                    addESP(newPlayer.Character)
+                end
+                
+                -- Add to connections
+                espConnections[newPlayer] = newPlayer.CharacterAdded:Connect(function(char)
+                    if newPlayer ~= player and _G.esp then
+                        task.wait(1)
+                        addESP(char)
+                    end
+                end)
+            end
+        end)
+    end
+    
+    -- Setup cleanup for players leaving
+    if not playerLeaveConnection then
+        playerLeaveConnection = Players.PlayerRemoving:Connect(function(leavingPlayer)
+            if espConnections[leavingPlayer] then
+                espConnections[leavingPlayer]:Disconnect()
+                espConnections[leavingPlayer] = nil
+            end
+        end)
     end
 end
 
@@ -341,12 +424,23 @@ local function removeAllESP()
         end
     end
     
-    -- Disconnect connections
+    -- Disconnect all connections
     for plr, connection in pairs(espConnections) do
         if connection then
             connection:Disconnect()
         end
         espConnections[plr] = nil
+    end
+    
+    -- Disconnect player join/leave connections
+    if playerJoinConnection then
+        playerJoinConnection:Disconnect()
+        playerJoinConnection = nil
+    end
+    
+    if playerLeaveConnection then
+        playerLeaveConnection:Disconnect()
+        playerLeaveConnection = nil
     end
 end
 
@@ -1021,4 +1115,3 @@ Rayfield:Notify({
 print("👊 GILONG Hub - Slap Battles Script Loaded!")
 print("💥 Features: Auto Slap, Kill Aura, Anti-Cheat Bypass & More!")
 print("🏆 Dominate the arena safely!")
-
