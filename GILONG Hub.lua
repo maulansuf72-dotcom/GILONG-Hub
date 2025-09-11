@@ -41,6 +41,20 @@ local MovementTab = Window:CreateTab("🏃‍♂️ Movement", nil)
 local UtilityTab = Window:CreateTab("🔧 Utility", nil)
 local DebugTab = Window:CreateTab("🔧 Debug", nil)
 
+-- Global Variables for new features
+_G.aimbot = false
+_G.aimbotRange = 50
+_G.smoothAim = true
+_G.aimSmoothness = 0.1
+_G.antiKick = false
+_G.gloveDetector = false
+_G.serverInfo = false
+_G.autoDodge = false
+_G.dodgeRange = 15
+_G.dodgeDistance = 20
+_G.dodgeCooldown = 1
+_G.dodgeNotifications = true
+
 -- Services
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -979,6 +993,374 @@ DebugTab:CreateButton({
     end,
 })
 
+-- Advanced Tab
+local AdvancedTab = Window:CreateTab("⚡ Advanced", nil)
+
+-- Advanced Features UI
+AdvancedTab:CreateToggle({
+    Name = "🎯 Aimbot",
+    CurrentValue = false,
+    Flag = "Aimbot",
+    Callback = function(Value)
+        _G.aimbot = Value
+        if Value then
+            Rayfield:Notify({
+                Title = "Aimbot Enabled",
+                Content = "Auto aim to closest player activated!",
+                Duration = 3,
+            })
+        end
+    end,
+})
+
+AdvancedTab:CreateSlider({
+    Name = "Aimbot Range",
+    Range = {10, 100},
+    Increment = 5,
+    Suffix = " studs",
+    CurrentValue = 50,
+    Flag = "AimbotRange",
+    Callback = function(Value)
+        _G.aimbotRange = Value
+    end,
+})
+
+AdvancedTab:CreateSlider({
+    Name = "Aim Smoothness",
+    Range = {0.01, 1},
+    Increment = 0.01,
+    Suffix = "",
+    CurrentValue = 0.1,
+    Flag = "AimSmoothness",
+    Callback = function(Value)
+        _G.aimSmoothness = Value
+    end,
+})
+
+AdvancedTab:CreateToggle({
+    Name = "🛡️ Anti-Kick Protection",
+    CurrentValue = false,
+    Flag = "AntiKick",
+    Callback = function(Value)
+        _G.antiKick = Value
+        if Value then
+            Rayfield:Notify({
+                Title = "Anti-Kick Enabled",
+                Content = "Protection from admin kicks activated!",
+                Duration = 3,
+            })
+        end
+    end,
+})
+
+-- Utility Features
+UtilityTab:CreateToggle({
+    Name = "🔍 Glove Detector",
+    CurrentValue = false,
+    Flag = "GloveDetector",
+    Callback = function(Value)
+        _G.gloveDetector = Value
+        if Value then
+            Rayfield:Notify({
+                Title = "Glove Detector Enabled",
+                Content = "Now detecting player gloves!",
+                Duration = 3,
+            })
+        end
+    end,
+})
+
+UtilityTab:CreateToggle({
+    Name = "📊 Server Info Display",
+    CurrentValue = false,
+    Flag = "ServerInfo",
+    Callback = function(Value)
+        _G.serverInfo = Value
+        if Value then
+            createServerInfo()
+            Rayfield:Notify({
+                Title = "Server Info Enabled",
+                Content = "Ping, time, and player info now displayed!",
+                Duration = 3,
+            })
+        else
+            if serverInfoGui then
+                serverInfoGui:Destroy()
+                serverInfoGui = nil
+            end
+        end
+    end,
+})
+
+-- Combat Features
+CombatTab:CreateToggle({
+    Name = "🎪 Auto Dodge",
+    CurrentValue = false,
+    Flag = "AutoDodge",
+    Callback = function(Value)
+        _G.autoDodge = Value
+        if Value then
+            Rayfield:Notify({
+                Title = "Auto Dodge Enabled",
+                Content = "Automatically dodging incoming attacks!",
+                Duration = 3,
+            })
+        end
+    end,
+})
+
+CombatTab:CreateSlider({
+    Name = "Dodge Range",
+    Range = {5, 30},
+    Increment = 1,
+    Suffix = " studs",
+    CurrentValue = 15,
+    Flag = "DodgeRange",
+    Callback = function(Value)
+        _G.dodgeRange = Value
+    end,
+})
+
+CombatTab:CreateSlider({
+    Name = "Dodge Distance",
+    Range = {10, 50},
+    Increment = 5,
+    Suffix = " studs",
+    CurrentValue = 20,
+    Flag = "DodgeDistance",
+    Callback = function(Value)
+        _G.dodgeDistance = Value
+    end,
+})
+
+-- Aimbot System
+local function aimbot()
+    if not _G.aimbot then return end
+    
+    local character = player.Character
+    if not character or not character:FindFirstChild("HumanoidRootPart") then return end
+    
+    local target = getClosestPlayer()
+    if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+        local distance = getDistance(character.HumanoidRootPart, target.Character.HumanoidRootPart)
+        
+        if distance <= _G.aimbotRange then
+            -- Auto aim camera to target
+            local camera = Workspace.CurrentCamera
+            local targetPosition = target.Character.HumanoidRootPart.Position
+            
+            -- Smooth camera movement
+            local currentCFrame = camera.CFrame
+            local targetCFrame = CFrame.lookAt(camera.CFrame.Position, targetPosition)
+            
+            if _G.smoothAim then
+                camera.CFrame = currentCFrame:Lerp(targetCFrame, _G.aimSmoothness)
+            else
+                camera.CFrame = targetCFrame
+            end
+        end
+    end
+end
+
+-- Anti-Kick Protection
+local antiKickConnections = {}
+local function setupAntiKick()
+    if not _G.antiKick then return end
+    
+    -- Hook RemoteEvents to prevent kick
+    for _, obj in pairs(ReplicatedStorage:GetDescendants()) do
+        if obj:IsA("RemoteEvent") then
+            local name = obj.Name:lower()
+            if name:find("kick") or name:find("ban") or name:find("remove") then
+                if not antiKickConnections[obj] then
+                    antiKickConnections[obj] = obj.OnClientEvent:Connect(function(...)
+                        -- Block kick events
+                        return
+                    end)
+                end
+            end
+        end
+    end
+    
+    -- Anti-teleport to void
+    local character = player.Character
+    if character and character:FindFirstChild("HumanoidRootPart") then
+        local hrp = character.HumanoidRootPart
+        if hrp.Position.Y < -100 then
+            hrp.CFrame = CFrame.new(0, 50, 0) -- Safe position
+        end
+    end
+end
+
+-- Glove Detector
+local gloveInfo = {}
+local function detectGloves()
+    if not _G.gloveDetector then return end
+    
+    for _, plr in pairs(Players:GetPlayers()) do
+        if plr ~= player and plr.Character then
+            local tool = plr.Character:FindFirstChildOfClass("Tool")
+            if tool then
+                gloveInfo[plr.Name] = tool.Name
+            else
+                gloveInfo[plr.Name] = "No Glove"
+            end
+        end
+    end
+end
+
+-- Server Info Display
+local serverInfoGui
+local function createServerInfo()
+    if serverInfoGui then serverInfoGui:Destroy() end
+    
+    serverInfoGui = Instance.new("ScreenGui")
+    serverInfoGui.Name = "ServerInfo"
+    serverInfoGui.Parent = player.PlayerGui
+    
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, 250, 0, 150)
+    frame.Position = UDim2.new(0, 10, 0, 200)
+    frame.BackgroundColor3 = Color3.new(0, 0, 0)
+    frame.BackgroundTransparency = 0.3
+    frame.BorderSizePixel = 0
+    frame.Parent = serverInfoGui
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = frame
+    
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, 0, 0, 25)
+    title.Position = UDim2.new(0, 0, 0, 0)
+    title.BackgroundTransparency = 1
+    title.Text = "📊 Server Info"
+    title.TextColor3 = Color3.new(1, 1, 1)
+    title.TextScaled = true
+    title.Font = Enum.Font.GothamBold
+    title.Parent = frame
+    
+    local pingLabel = Instance.new("TextLabel")
+    pingLabel.Size = UDim2.new(1, 0, 0, 25)
+    pingLabel.Position = UDim2.new(0, 0, 0, 30)
+    pingLabel.BackgroundTransparency = 1
+    pingLabel.Text = "Ping: Loading..."
+    pingLabel.TextColor3 = Color3.new(0, 1, 0)
+    pingLabel.TextScaled = true
+    pingLabel.Font = Enum.Font.Gotham
+    pingLabel.Parent = frame
+    
+    local timeLabel = Instance.new("TextLabel")
+    timeLabel.Size = UDim2.new(1, 0, 0, 25)
+    timeLabel.Position = UDim2.new(0, 0, 0, 60)
+    timeLabel.BackgroundTransparency = 1
+    timeLabel.Text = "Server Time: 00:00:00"
+    timeLabel.TextColor3 = Color3.new(0, 1, 1)
+    timeLabel.TextScaled = true
+    timeLabel.Font = Enum.Font.Gotham
+    timeLabel.Parent = frame
+    
+    local playersLabel = Instance.new("TextLabel")
+    playersLabel.Size = UDim2.new(1, 0, 0, 25)
+    playersLabel.Position = UDim2.new(0, 0, 0, 90)
+    playersLabel.BackgroundTransparency = 1
+    playersLabel.Text = "Players: " .. #Players:GetPlayers()
+    playersLabel.TextColor3 = Color3.new(1, 1, 0)
+    playersLabel.TextScaled = true
+    playersLabel.Font = Enum.Font.Gotham
+    playersLabel.Parent = frame
+    
+    local gloveLabel = Instance.new("TextLabel")
+    gloveLabel.Size = UDim2.new(1, 0, 0, 25)
+    gloveLabel.Position = UDim2.new(0, 0, 0, 120)
+    gloveLabel.BackgroundTransparency = 1
+    gloveLabel.Text = "Gloves Detected: 0"
+    gloveLabel.TextColor3 = Color3.new(1, 0.5, 0)
+    gloveLabel.TextScaled = true
+    gloveLabel.Font = Enum.Font.Gotham
+    gloveLabel.Parent = frame
+    
+    -- Update function
+    local startTime = tick()
+    spawn(function()
+        while serverInfoGui and serverInfoGui.Parent do
+            -- Update ping
+            local ping = game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValueString()
+            pingLabel.Text = "📡 Ping: " .. ping
+            
+            -- Update server time
+            local elapsed = tick() - startTime
+            local hours = math.floor(elapsed / 3600)
+            local minutes = math.floor((elapsed % 3600) / 60)
+            local seconds = math.floor(elapsed % 60)
+            timeLabel.Text = string.format("🕒 Server Time: %02d:%02d:%02d", hours, minutes, seconds)
+            
+            -- Update player count
+            playersLabel.Text = "👥 Players: " .. #Players:GetPlayers()
+            
+            -- Update glove count
+            local gloveCount = 0
+            for _, info in pairs(gloveInfo) do
+                if info ~= "No Glove" then
+                    gloveCount = gloveCount + 1
+                end
+            end
+            gloveLabel.Text = "🥊 Gloves: " .. gloveCount
+            
+            task.wait(1)
+        end
+    end)
+end
+
+-- Auto Dodge System
+local lastDodgeTime = 0
+local function autoDodge()
+    if not _G.autoDodge then return end
+    
+    local character = player.Character
+    if not character or not character:FindFirstChild("HumanoidRootPart") then return end
+    
+    local currentTime = tick()
+    if currentTime - lastDodgeTime < _G.dodgeCooldown then return end
+    
+    -- Check for nearby players with tools
+    for _, plr in pairs(Players:GetPlayers()) do
+        if plr ~= player and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+            local distance = getDistance(character.HumanoidRootPart, plr.Character.HumanoidRootPart)
+            
+            if distance <= _G.dodgeRange then
+                local tool = plr.Character:FindFirstChildOfClass("Tool")
+                if tool then
+                    -- Dodge by jumping and moving
+                    local humanoid = character:FindFirstChild("Humanoid")
+                    if humanoid then
+                        humanoid.Jump = true
+                        
+                        -- Random dodge direction
+                        local dodgeDirection = Vector3.new(
+                            math.random(-1, 1),
+                            0,
+                            math.random(-1, 1)
+                        ).Unit * _G.dodgeDistance
+                        
+                        character.HumanoidRootPart.Velocity = character.HumanoidRootPart.Velocity + dodgeDirection
+                        lastDodgeTime = currentTime
+                        
+                        if _G.dodgeNotifications then
+                            Rayfield:Notify({
+                                Title = "🎪 Auto Dodge!",
+                                Content = "Dodged attack from " .. plr.Name,
+                                Duration = 1,
+                            })
+                        end
+                        break
+                    end
+                end
+            end
+        end
+    end
+end
+
 -- HP Tab
 local HPTab = Window:CreateTab("🩺 HP System", 4483362458)
 
@@ -1085,6 +1467,12 @@ RunService.Heartbeat:Connect(function()
         if _G.esp and loopCount % 120 == 0 then
             setupESP()
         end
+        
+        -- New advanced features
+        if _G.aimbot then aimbot() end
+        if _G.antiKick then setupAntiKick() end
+        if _G.gloveDetector and loopCount % 60 == 0 then detectGloves() end
+        if _G.autoDodge then autoDodge() end
     end
 end)
 
@@ -1107,4 +1495,3 @@ Rayfield:Notify({
 print("👊 GILONG Hub - Slap Battles Script Loaded!")
 print("💥 Features: Auto Slap, Kill Aura, Anti-Cheat Bypass & More!")
 print("🏆 Dominate the arena safely!")
-
