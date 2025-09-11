@@ -282,33 +282,84 @@ local espConnections = {}
 local playerJoinConnection
 local clickTeleportConnection
 
--- Add ESP to character (Simple & Working)
+-- Add ESP to character (Multiple Methods for Compatibility)
 local function addESP(char)
     if not char or not _G.esp then return end
     
-    -- Remove existing highlight
+    -- Remove existing ESP
     local existingHighlight = char:FindFirstChild("ESP_Highlight")
-    if existingHighlight then
-        existingHighlight:Destroy()
-    end
+    local existingBox = char:FindFirstChild("ESP_Box")
+    local existingBillboard = char:FindFirstChild("ESP_Name")
     
-    -- Create new highlight
-    local highlight = Instance.new("Highlight")
-    highlight.Name = "ESP_Highlight"
-    highlight.Parent = char
-    highlight.Adornee = char
-    highlight.FillColor = Color3.fromRGB(0, 255, 0) -- Green
-    highlight.OutlineColor = Color3.fromRGB(255, 255, 255) -- White outline
-    highlight.FillTransparency = 0.5
-    highlight.OutlineTransparency = 0
+    if existingHighlight then existingHighlight:Destroy() end
+    if existingBox then existingBox:Destroy() end
+    if existingBillboard then existingBillboard:Destroy() end
+    
+    -- Method 1: Highlight (Primary)
+    pcall(function()
+        local highlight = Instance.new("Highlight")
+        highlight.Name = "ESP_Highlight"
+        highlight.Parent = char
+        highlight.Adornee = char
+        highlight.FillColor = Color3.fromRGB(0, 255, 0) -- Bright green
+        highlight.OutlineColor = Color3.fromRGB(255, 255, 255) -- White
+        highlight.FillTransparency = 0.3
+        highlight.OutlineTransparency = 0
+        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    end)
+    
+    -- Method 2: SelectionBox (Fallback)
+    pcall(function()
+        local box = Instance.new("SelectionBox")
+        box.Name = "ESP_Box"
+        box.Parent = char
+        box.Adornee = char
+        box.Color3 = Color3.fromRGB(0, 255, 0) -- Green
+        box.LineThickness = 0.15
+        box.Transparency = 0.3
+    end)
+    
+    -- Method 3: Name Billboard (Always works)
+    pcall(function()
+        local humanoidRootPart = char:FindFirstChild("HumanoidRootPart")
+        if humanoidRootPart then
+            local billboard = Instance.new("BillboardGui")
+            billboard.Name = "ESP_Name"
+            billboard.Parent = humanoidRootPart
+            billboard.Size = UDim2.new(0, 200, 0, 50)
+            billboard.StudsOffset = Vector3.new(0, 3, 0)
+            billboard.AlwaysOnTop = true
+            
+            local nameLabel = Instance.new("TextLabel")
+            nameLabel.Parent = billboard
+            nameLabel.Size = UDim2.new(1, 0, 1, 0)
+            nameLabel.BackgroundTransparency = 1
+            nameLabel.Text = "[ESP] " .. Players:GetPlayerFromCharacter(char).Name
+            nameLabel.TextColor3 = Color3.fromRGB(0, 255, 0) -- Green text
+            nameLabel.TextScaled = true
+            nameLabel.Font = Enum.Font.GothamBold
+            nameLabel.TextStrokeTransparency = 0
+            nameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        end
+    end)
 end
 
 -- Remove ESP from character
 local function removeESPFromChar(char)
     if char then
         local highlight = char:FindFirstChild("ESP_Highlight")
-        if highlight then
-            highlight:Destroy()
+        local box = char:FindFirstChild("ESP_Box")
+        local billboard = char:FindFirstChild("ESP_Name")
+        
+        if highlight then highlight:Destroy() end
+        if box then box:Destroy() end
+        if billboard then billboard:Destroy() end
+        
+        -- Also check HumanoidRootPart for billboard
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            local hbillboard = hrp:FindFirstChild("ESP_Name")
+            if hbillboard then hbillboard:Destroy() end
         end
     end
 end
