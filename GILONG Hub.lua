@@ -7,7 +7,7 @@ local Window = Rayfield:CreateWindow({
    Name = "GILONG Hub | Slap Battles",
    Icon = 0,
    LoadingTitle = "Slap Battles Script",
-   LoadingSubtitle = "By RYXu",
+   LoadingSubtitle = "Ultimate Slapping Domination",
    ShowText = "GILONG Hub",
    Theme = "Amethyst",
    ToggleUIKeybind = Enum.KeyCode.RightControl,
@@ -31,7 +31,7 @@ local Window = Rayfield:CreateWindow({
       FileName = "GILONGHub_SlapBattles",
       SaveKey = true,
       GrabKeyFromSite = true,
-      Key = {"AyamGoreng!"}
+      Key = {"SlapKing2025!"}
    },
 })
 
@@ -1133,64 +1133,96 @@ CombatTab:CreateSlider({
     end,
 })
 
--- Advanced Aimbot System with Target Switching
-local currentTarget = nil
-local targetLockTime = 0
-local function aimbot()
-    if not _G.aimbot then return end
+-- Session Timer Display
+local sessionStartTime = tick()
+local sessionTimerGui
+local function createSessionTimer()
+    if sessionTimerGui then
+        sessionTimerGui:Destroy()
+    end
     
+    sessionTimerGui = Instance.new("ScreenGui")
+    sessionTimerGui.Name = "SessionTimer"
+    sessionTimerGui.Parent = game.CoreGui
+    
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, 150, 0, 50)
+    frame.Position = UDim2.new(1, -160, 0, 10)
+    frame.BackgroundColor3 = Color3.new(0, 0, 0)
+    frame.BackgroundTransparency = 0.3
+    frame.BorderSizePixel = 1
+    frame.BorderColor3 = Color3.new(0, 1, 0)
+    frame.Parent = sessionTimerGui
+    
+    local titleLabel = Instance.new("TextLabel")
+    titleLabel.Size = UDim2.new(1, 0, 0, 20)
+    titleLabel.Position = UDim2.new(0, 0, 0, 0)
+    titleLabel.BackgroundTransparency = 1
+    titleLabel.Text = "⏱️ Session Time"
+    titleLabel.TextColor3 = Color3.new(1, 1, 1)
+    titleLabel.TextSize = 12
+    titleLabel.Font = Enum.Font.SourceSansBold
+    titleLabel.Parent = frame
+    
+    local timeLabel = Instance.new("TextLabel")
+    timeLabel.Size = UDim2.new(1, 0, 0, 25)
+    timeLabel.Position = UDim2.new(0, 0, 0, 20)
+    timeLabel.BackgroundTransparency = 1
+    timeLabel.Text = "00:00:00"
+    timeLabel.TextColor3 = Color3.new(0, 1, 0)
+    timeLabel.TextSize = 14
+    timeLabel.Font = Enum.Font.SourceSans
+    timeLabel.Parent = frame
+    
+    -- Update timer
+    spawn(function()
+        while sessionTimerGui and sessionTimerGui.Parent do
+            local elapsed = tick() - sessionStartTime
+            local hours = math.floor(elapsed / 3600)
+            local minutes = math.floor((elapsed % 3600) / 60)
+            local seconds = math.floor(elapsed % 60)
+            timeLabel.Text = string.format("%02d:%02d:%02d", hours, minutes, seconds)
+            task.wait(1)
+        end
+    end)
+end
+
+local function removeSessionTimer()
+    if sessionTimerGui then
+        sessionTimerGui:Destroy()
+        sessionTimerGui = nil
+    end
+end
+
+-- Lobby Teleporter
+local function teleportToLobby()
     local character = player.Character
     if not character or not character:FindFirstChild("HumanoidRootPart") then return end
     
-    local camera = Workspace.CurrentCamera
-    if not camera then return end
+    -- Try multiple spawn locations
+    local spawnLocations = {
+        Vector3.new(0, 50, 0),        -- Default spawn
+        Vector3.new(-5, 50, -5),      -- Offset spawn 1
+        Vector3.new(5, 50, 5),        -- Offset spawn 2
+        Vector3.new(0, 100, 0),       -- High spawn
+    }
     
-    -- Get closest player
-    local closestPlayer = nil
-    local closestDistance = math.huge
-    
-    for _, plr in pairs(Players:GetPlayers()) do
-        if plr ~= player and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
-            local distance = getDistance(character.HumanoidRootPart, plr.Character.HumanoidRootPart)
-            if distance <= _G.aimbotRange and distance < closestDistance then
-                closestDistance = distance
-                closestPlayer = plr
-            end
-        end
-    end
-    
-    -- Switch target if current target is too far or new target is closer
-    if not currentTarget or not currentTarget.Character or 
-       not currentTarget.Character:FindFirstChild("HumanoidRootPart") or
-       getDistance(character.HumanoidRootPart, currentTarget.Character.HumanoidRootPart) > _G.aimbotRange or
-       (closestPlayer and closestDistance < getDistance(character.HumanoidRootPart, currentTarget.Character.HumanoidRootPart) - 5) then
-        currentTarget = closestPlayer
-        targetLockTime = tick()
-    end
-    
-    -- Aim at current target
-    if currentTarget and currentTarget.Character and currentTarget.Character:FindFirstChild("HumanoidRootPart") then
+    for _, spawnPos in pairs(spawnLocations) do
         pcall(function()
-            local targetPart = currentTarget.Character.HumanoidRootPart
-            local targetPosition = targetPart.Position + Vector3.new(0, 1.5, 0) -- Aim at torso level
-            
-            -- Predict movement
-            if targetPart.Velocity.Magnitude > 5 then
-                local prediction = targetPart.Velocity * 0.1 -- Simple prediction
-                targetPosition = targetPosition + prediction
-            end
-            
-            -- Calculate camera direction
-            local direction = (targetPosition - camera.CFrame.Position).Unit
-            local newCFrame = CFrame.lookAt(camera.CFrame.Position, camera.CFrame.Position + direction)
-            
-            -- Apply smooth or instant aim
-            if _G.smoothAim then
-                camera.CFrame = camera.CFrame:Lerp(newCFrame, _G.aimSmoothness)
-            else
-                camera.CFrame = newCFrame
-            end
+            character.HumanoidRootPart.CFrame = CFrame.new(spawnPos)
+            task.wait(0.1)
         end)
+        
+        -- Check if teleport was successful
+        if character.HumanoidRootPart.Position.Y > 10 then
+            Rayfield:Notify({
+                Title = "🚪 Lobby Teleporter",
+                Content = "Teleported to spawn!",
+                Duration = 2,
+                Image = 4483362458,
+            })
+            break
+        end
     end
 end
 
@@ -1309,140 +1341,7 @@ local function removeGloveDetector()
     end
 end
 
--- Simple Working Server Info Display
-local serverInfoGui
-local function createServerInfo()
-    -- Remove existing GUI
-    if serverInfoGui then
-        serverInfoGui:Destroy()
-    end
-    
-    -- Create new GUI
-    serverInfoGui = Instance.new("ScreenGui")
-    serverInfoGui.Name = "GILONG_ServerInfo"
-    serverInfoGui.ResetOnSpawn = false
-    serverInfoGui.Parent = player.PlayerGui
-    
-    -- Main frame
-    local mainFrame = Instance.new("Frame")
-    mainFrame.Name = "MainFrame"
-    mainFrame.Size = UDim2.new(0, 220, 0, 140)
-    mainFrame.Position = UDim2.new(0, 10, 0, 200)
-    mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-    mainFrame.BorderSizePixel = 2
-    mainFrame.BorderColor3 = Color3.fromRGB(0, 255, 0)
-    mainFrame.Parent = serverInfoGui
-    
-    -- Title
-    local titleLabel = Instance.new("TextLabel")
-    titleLabel.Name = "Title"
-    titleLabel.Size = UDim2.new(1, 0, 0, 25)
-    titleLabel.Position = UDim2.new(0, 0, 0, 0)
-    titleLabel.BackgroundTransparency = 1
-    titleLabel.Text = "📊 GILONG Server Info"
-    titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    titleLabel.TextSize = 14
-    titleLabel.Font = Enum.Font.GothamBold
-    titleLabel.Parent = mainFrame
-    
-    -- Info labels
-    local pingLabel = Instance.new("TextLabel")
-    pingLabel.Name = "Ping"
-    pingLabel.Size = UDim2.new(1, -10, 0, 20)
-    pingLabel.Position = UDim2.new(0, 5, 0, 30)
-    pingLabel.BackgroundTransparency = 1
-    pingLabel.Text = "📡 Ping: Loading..."
-    pingLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
-    pingLabel.TextSize = 12
-    pingLabel.Font = Enum.Font.Gotham
-    pingLabel.TextXAlignment = Enum.TextXAlignment.Left
-    pingLabel.Parent = mainFrame
-    
-    local fpsLabel = Instance.new("TextLabel")
-    fpsLabel.Name = "FPS"
-    fpsLabel.Size = UDim2.new(1, -10, 0, 20)
-    fpsLabel.Position = UDim2.new(0, 5, 0, 55)
-    fpsLabel.BackgroundTransparency = 1
-    fpsLabel.Text = "⚡ FPS: 60"
-    fpsLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
-    fpsLabel.TextSize = 12
-    fpsLabel.Font = Enum.Font.Gotham
-    fpsLabel.TextXAlignment = Enum.TextXAlignment.Left
-    fpsLabel.Parent = mainFrame
-    
-    local playersLabel = Instance.new("TextLabel")
-    playersLabel.Name = "Players"
-    playersLabel.Size = UDim2.new(1, -10, 0, 20)
-    playersLabel.Position = UDim2.new(0, 5, 0, 80)
-    playersLabel.BackgroundTransparency = 1
-    playersLabel.Text = "👥 Players: " .. #Players:GetPlayers()
-    playersLabel.TextColor3 = Color3.fromRGB(0, 255, 255)
-    playersLabel.TextSize = 12
-    playersLabel.Font = Enum.Font.Gotham
-    playersLabel.TextXAlignment = Enum.TextXAlignment.Left
-    playersLabel.Parent = mainFrame
-    
-    local timeLabel = Instance.new("TextLabel")
-    timeLabel.Name = "Time"
-    timeLabel.Size = UDim2.new(1, -10, 0, 20)
-    timeLabel.Position = UDim2.new(0, 5, 0, 105)
-    timeLabel.BackgroundTransparency = 1
-    timeLabel.Text = "🕒 Time: 00:00:00"
-    timeLabel.TextColor3 = Color3.fromRGB(255, 0, 255)
-    timeLabel.TextSize = 12
-    timeLabel.Font = Enum.Font.Gotham
-    timeLabel.TextXAlignment = Enum.TextXAlignment.Left
-    timeLabel.Parent = mainFrame
-    
-    -- Update loop
-    local startTime = tick()
-    local frameCount = 0
-    local lastUpdate = tick()
-    
-    spawn(function()
-        while serverInfoGui and serverInfoGui.Parent do
-            frameCount = frameCount + 1
-            
-            if tick() - lastUpdate >= 1 then
-                pcall(function()
-                    -- Update ping
-                    local stats = game:GetService("Stats")
-                    local ping = stats.Network.ServerStatsItem["Data Ping"]:GetValueString()
-                    mainFrame.Ping.Text = "📡 Ping: " .. ping
-                    
-                    -- Update FPS
-                    mainFrame.FPS.Text = "⚡ FPS: " .. frameCount
-                    
-                    -- Update players
-                    mainFrame.Players.Text = "👥 Players: " .. #Players:GetPlayers()
-                    
-                    -- Update time
-                    local elapsed = tick() - startTime
-                    local hours = math.floor(elapsed / 3600)
-                    local minutes = math.floor((elapsed % 3600) / 60)
-                    local seconds = math.floor(elapsed % 60)
-                    mainFrame.Time.Text = string.format("🕒 Time: %02d:%02d:%02d", hours, minutes, seconds)
-                    
-                    frameCount = 0
-                    lastUpdate = tick()
-                end)
-            end
-            
-            task.wait(0.1)
-        end
-    end)
-end
-
-local function removeServerInfo()
-    if serverInfoGui then
-        serverInfoGui:Destroy()
-        serverInfoGui = nil
-    end
-    if serverInfoConnection then
-        serverInfoConnection:Disconnect()
-        serverInfoConnection = nil
-    end
-end
+-- Removed old server info code - replaced with Session Timer
 
 -- Reliable Auto Dodge System
 local lastDodgeTime = 0
@@ -1607,6 +1506,105 @@ HPTab:CreateParagraph({Title = "HP Glove Support", Content = "The Hitbox Expande
 
 HPTab:CreateParagraph({Title = "Mobile Support", Content = "This script is fully compatible with mobile devices! Touch controls are automatically detected and used. The HP display is optimized for mobile screens, and all features work seamlessly on both PC and mobile."})
 
+-- Session Timer Tab
+local TimerTab = Window:CreateTab("⏱️ Session Timer", 4483362458)
+
+TimerTab:CreateToggle({
+    Name = "Show Session Timer",
+    CurrentValue = false,
+    Flag = "SessionTimer",
+    Callback = function(Value)
+        _G.sessionTimer = Value
+        if Value then
+            createSessionTimer()
+            Rayfield:Notify({
+                Title = "⏱️ Session Timer",
+                Content = "Timer enabled!",
+                Duration = 2,
+                Image = 4483362458,
+            })
+        else
+            removeSessionTimer()
+            Rayfield:Notify({
+                Title = "⏱️ Session Timer",
+                Content = "Timer disabled!",
+                Duration = 2,
+                Image = 4483362458,
+            })
+        end
+    end,
+})
+
+TimerTab:CreateButton({
+    Name = "Reset Timer",
+    Callback = function()
+        sessionStartTime = tick()
+        Rayfield:Notify({
+            Title = "⏱️ Session Timer",
+            Content = "Timer reset!",
+            Duration = 2,
+            Image = 4483362458,
+        })
+    end,
+})
+
+AdvancedTab:CreateToggle({
+    Name = "🛡️ Anti-Kick Protection",
+    CurrentValue = false,
+    Flag = "AntiKick",
+    Callback = function(Value)
+        _G.antiKick = Value
+        if Value then
+            Rayfield:Notify({
+                Title = "Anti-Kick Enabled",
+                Content = "Protection from admin kicks activated!",
+                Duration = 3,
+            })
+        end
+    end,
+})
+
+-- Lobby Teleporter Tab
+local LobbyTab = Window:CreateTab("🚪 Lobby Teleporter", 4483362458)
+
+LobbyTab:CreateButton({
+    Name = "Teleport to Lobby",
+    Callback = function()
+        teleportToLobby()
+    end,
+})
+
+LobbyTab:CreateButton({
+    Name = "Teleport to Safe Zone",
+    Callback = function()
+        local character = player.Character
+        if character and character:FindFirstChild("HumanoidRootPart") then
+            character.HumanoidRootPart.CFrame = CFrame.new(0, 200, 0)
+            Rayfield:Notify({
+                Title = "🚪 Lobby Teleporter",
+                Content = "Teleported to safe zone!",
+                Duration = 2,
+                Image = 4483362458,
+            })
+        end
+    end,
+})
+
+LobbyTab:CreateButton({
+    Name = "Reset Character",
+    Callback = function()
+        if player.Character and player.Character:FindFirstChild("Humanoid") then
+            player.Character.Humanoid.Health = 0
+            Rayfield:Notify({
+                Title = "🚪 Lobby Teleporter",
+                Content = "Character reset!",
+                Duration = 2,
+                Image = 4483362458,
+            })
+        end
+    end,
+})
+
 -- Main Loop
 local loopCount = 0
 RunService.Heartbeat:Connect(function()
@@ -1660,4 +1658,3 @@ Rayfield:Notify({
 print("👊 GILONG Hub - Slap Battles Script Loaded!")
 print("💥 Features: Auto Slap, Kill Aura, Anti-Cheat Bypass & More!")
 print("🏆 Dominate the arena safely!")
-
