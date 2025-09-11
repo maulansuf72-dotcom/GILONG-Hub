@@ -7,7 +7,7 @@ local Window = Rayfield:CreateWindow({
    Name = "GILONG Hub | Slap Battles",
    Icon = 0,
    LoadingTitle = "Slap Battles Script",
-   LoadingSubtitle = "By RYXu",
+   LoadingSubtitle = "Ultimate Slapping Domination",
    ShowText = "GILONG Hub",
    Theme = "Amethyst",
    ToggleUIKeybind = Enum.KeyCode.RightControl,
@@ -1061,11 +1061,14 @@ UtilityTab:CreateToggle({
     Callback = function(Value)
         _G.gloveDetector = Value
         if Value then
+            detectGloves()
             Rayfield:Notify({
                 Title = "Glove Detector Enabled",
                 Content = "Now detecting player gloves!",
                 Duration = 3,
             })
+        else
+            removeGloveDetector()
         end
     end,
 })
@@ -1084,10 +1087,7 @@ UtilityTab:CreateToggle({
                 Duration = 3,
             })
         else
-            if serverInfoGui then
-                serverInfoGui:Destroy()
-                serverInfoGui = nil
-            end
+            removeServerInfo()
         end
     end,
 })
@@ -1133,7 +1133,7 @@ CombatTab:CreateSlider({
     end,
 })
 
--- Aimbot System
+-- Fixed Aimbot System
 local function aimbot()
     if not _G.aimbot then return end
     
@@ -1145,19 +1145,21 @@ local function aimbot()
         local distance = getDistance(character.HumanoidRootPart, target.Character.HumanoidRootPart)
         
         if distance <= _G.aimbotRange then
-            -- Auto aim camera to target
-            local camera = Workspace.CurrentCamera
-            local targetPosition = target.Character.HumanoidRootPart.Position
-            
-            -- Smooth camera movement
-            local currentCFrame = camera.CFrame
-            local targetCFrame = CFrame.lookAt(camera.CFrame.Position, targetPosition)
-            
-            if _G.smoothAim then
-                camera.CFrame = currentCFrame:Lerp(targetCFrame, _G.aimSmoothness)
-            else
-                camera.CFrame = targetCFrame
-            end
+            pcall(function()
+                -- Auto aim camera to target
+                local camera = Workspace.CurrentCamera
+                local targetPosition = target.Character.HumanoidRootPart.Position + Vector3.new(0, 2, 0) -- Aim slightly higher
+                
+                -- Calculate look direction
+                local lookDirection = (targetPosition - camera.CFrame.Position).Unit
+                local newCFrame = CFrame.lookAt(camera.CFrame.Position, camera.CFrame.Position + lookDirection)
+                
+                if _G.smoothAim then
+                    camera.CFrame = camera.CFrame:Lerp(newCFrame, _G.aimSmoothness)
+                else
+                    camera.CFrame = newCFrame
+                end
+            end)
         end
     end
 end
@@ -1192,11 +1194,13 @@ local function setupAntiKick()
     end
 end
 
--- Glove Detector
+-- Fixed Glove Detector with Display
 local gloveInfo = {}
+local gloveGui
 local function detectGloves()
     if not _G.gloveDetector then return end
     
+    -- Update glove info
     for _, plr in pairs(Players:GetPlayers()) do
         if plr ~= player and plr.Character then
             local tool = plr.Character:FindFirstChildOfClass("Tool")
@@ -1207,154 +1211,238 @@ local function detectGloves()
             end
         end
     end
+    
+    -- Create or update glove display
+    if not gloveGui then
+        gloveGui = Instance.new("ScreenGui")
+        gloveGui.Name = "GloveDetector"
+        gloveGui.Parent = player.PlayerGui
+        
+        local frame = Instance.new("ScrollingFrame")
+        frame.Size = UDim2.new(0, 200, 0, 300)
+        frame.Position = UDim2.new(1, -210, 0, 10)
+        frame.BackgroundColor3 = Color3.new(0, 0, 0)
+        frame.BackgroundTransparency = 0.3
+        frame.BorderSizePixel = 0
+        frame.ScrollBarThickness = 5
+        frame.Parent = gloveGui
+        
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(0, 8)
+        corner.Parent = frame
+        
+        local title = Instance.new("TextLabel")
+        title.Size = UDim2.new(1, 0, 0, 30)
+        title.Position = UDim2.new(0, 0, 0, 0)
+        title.BackgroundTransparency = 1
+        title.Text = "🔍 Glove Detector"
+        title.TextColor3 = Color3.new(1, 1, 1)
+        title.TextScaled = true
+        title.Font = Enum.Font.GothamBold
+        title.Parent = frame
+        
+        local layout = Instance.new("UIListLayout")
+        layout.SortOrder = Enum.SortOrder.LayoutOrder
+        layout.Padding = UDim.new(0, 2)
+        layout.Parent = frame
+    end
+    
+    -- Clear existing labels
+    for _, child in pairs(gloveGui.ScrollingFrame:GetChildren()) do
+        if child:IsA("TextLabel") and child.Name ~= "Title" then
+            child:Destroy()
+        end
+    end
+    
+    -- Add glove info labels
+    local yPos = 35
+    for playerName, gloveName in pairs(gloveInfo) do
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(1, -10, 0, 20)
+        label.Position = UDim2.new(0, 5, 0, yPos)
+        label.BackgroundTransparency = 1
+        label.Text = playerName .. ": " .. gloveName
+        label.TextColor3 = gloveName == "No Glove" and Color3.new(0.7, 0.7, 0.7) or Color3.new(0, 1, 0)
+        label.TextScaled = true
+        label.Font = Enum.Font.Gotham
+        label.Parent = gloveGui.ScrollingFrame
+        yPos = yPos + 22
+    end
+    
+    gloveGui.ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, yPos)
 end
 
--- Server Info Display
+local function removeGloveDetector()
+    if gloveGui then
+        gloveGui:Destroy()
+        gloveGui = nil
+    end
+end
+
+-- Fixed Server Info Display
 local serverInfoGui
+local serverInfoConnection
 local function createServerInfo()
     if serverInfoGui then serverInfoGui:Destroy() end
+    if serverInfoConnection then serverInfoConnection:Disconnect() end
     
-    serverInfoGui = Instance.new("ScreenGui")
-    serverInfoGui.Name = "ServerInfo"
-    serverInfoGui.Parent = player.PlayerGui
-    
-    local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0, 250, 0, 150)
-    frame.Position = UDim2.new(0, 10, 0, 200)
-    frame.BackgroundColor3 = Color3.new(0, 0, 0)
-    frame.BackgroundTransparency = 0.3
-    frame.BorderSizePixel = 0
-    frame.Parent = serverInfoGui
-    
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 8)
-    corner.Parent = frame
-    
-    local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, 0, 0, 25)
-    title.Position = UDim2.new(0, 0, 0, 0)
-    title.BackgroundTransparency = 1
-    title.Text = "📊 Server Info"
-    title.TextColor3 = Color3.new(1, 1, 1)
-    title.TextScaled = true
-    title.Font = Enum.Font.GothamBold
-    title.Parent = frame
-    
-    local pingLabel = Instance.new("TextLabel")
-    pingLabel.Size = UDim2.new(1, 0, 0, 25)
-    pingLabel.Position = UDim2.new(0, 0, 0, 30)
-    pingLabel.BackgroundTransparency = 1
-    pingLabel.Text = "Ping: Loading..."
-    pingLabel.TextColor3 = Color3.new(0, 1, 0)
-    pingLabel.TextScaled = true
-    pingLabel.Font = Enum.Font.Gotham
-    pingLabel.Parent = frame
-    
-    local timeLabel = Instance.new("TextLabel")
-    timeLabel.Size = UDim2.new(1, 0, 0, 25)
-    timeLabel.Position = UDim2.new(0, 0, 0, 60)
-    timeLabel.BackgroundTransparency = 1
-    timeLabel.Text = "Server Time: 00:00:00"
-    timeLabel.TextColor3 = Color3.new(0, 1, 1)
-    timeLabel.TextScaled = true
-    timeLabel.Font = Enum.Font.Gotham
-    timeLabel.Parent = frame
-    
-    local playersLabel = Instance.new("TextLabel")
-    playersLabel.Size = UDim2.new(1, 0, 0, 25)
-    playersLabel.Position = UDim2.new(0, 0, 0, 90)
-    playersLabel.BackgroundTransparency = 1
-    playersLabel.Text = "Players: " .. #Players:GetPlayers()
-    playersLabel.TextColor3 = Color3.new(1, 1, 0)
-    playersLabel.TextScaled = true
-    playersLabel.Font = Enum.Font.Gotham
-    playersLabel.Parent = frame
-    
-    local gloveLabel = Instance.new("TextLabel")
-    gloveLabel.Size = UDim2.new(1, 0, 0, 25)
-    gloveLabel.Position = UDim2.new(0, 0, 0, 120)
-    gloveLabel.BackgroundTransparency = 1
-    gloveLabel.Text = "Gloves Detected: 0"
-    gloveLabel.TextColor3 = Color3.new(1, 0.5, 0)
-    gloveLabel.TextScaled = true
-    gloveLabel.Font = Enum.Font.Gotham
-    gloveLabel.Parent = frame
-    
-    -- Update function
-    local startTime = tick()
-    spawn(function()
-        while serverInfoGui and serverInfoGui.Parent do
-            -- Update ping
-            local ping = game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValueString()
-            pingLabel.Text = "📡 Ping: " .. ping
+    pcall(function()
+        serverInfoGui = Instance.new("ScreenGui")
+        serverInfoGui.Name = "ServerInfo"
+        serverInfoGui.Parent = player.PlayerGui
+        
+        local frame = Instance.new("Frame")
+        frame.Size = UDim2.new(0, 250, 0, 150)
+        frame.Position = UDim2.new(0, 10, 0, 200)
+        frame.BackgroundColor3 = Color3.new(0, 0, 0)
+        frame.BackgroundTransparency = 0.3
+        frame.BorderSizePixel = 0
+        frame.Parent = serverInfoGui
+        
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(0, 8)
+        corner.Parent = frame
+        
+        local title = Instance.new("TextLabel")
+        title.Size = UDim2.new(1, 0, 0, 25)
+        title.Position = UDim2.new(0, 0, 0, 0)
+        title.BackgroundTransparency = 1
+        title.Text = "📊 Server Info"
+        title.TextColor3 = Color3.new(1, 1, 1)
+        title.TextScaled = true
+        title.Font = Enum.Font.GothamBold
+        title.Parent = frame
+        
+        local pingLabel = Instance.new("TextLabel")
+        pingLabel.Name = "PingLabel"
+        pingLabel.Size = UDim2.new(1, 0, 0, 25)
+        pingLabel.Position = UDim2.new(0, 0, 0, 30)
+        pingLabel.BackgroundTransparency = 1
+        pingLabel.Text = "📡 Ping: Loading..."
+        pingLabel.TextColor3 = Color3.new(0, 1, 0)
+        pingLabel.TextScaled = true
+        pingLabel.Font = Enum.Font.Gotham
+        pingLabel.Parent = frame
+        
+        local timeLabel = Instance.new("TextLabel")
+        timeLabel.Name = "TimeLabel"
+        timeLabel.Size = UDim2.new(1, 0, 0, 25)
+        timeLabel.Position = UDim2.new(0, 0, 0, 60)
+        timeLabel.BackgroundTransparency = 1
+        timeLabel.Text = "🕒 Server Time: 00:00:00"
+        timeLabel.TextColor3 = Color3.new(0, 1, 1)
+        timeLabel.TextScaled = true
+        timeLabel.Font = Enum.Font.Gotham
+        timeLabel.Parent = frame
+        
+        local playersLabel = Instance.new("TextLabel")
+        playersLabel.Name = "PlayersLabel"
+        playersLabel.Size = UDim2.new(1, 0, 0, 25)
+        playersLabel.Position = UDim2.new(0, 0, 0, 90)
+        playersLabel.BackgroundTransparency = 1
+        playersLabel.Text = "👥 Players: " .. #Players:GetPlayers()
+        playersLabel.TextColor3 = Color3.new(1, 1, 0)
+        playersLabel.TextScaled = true
+        playersLabel.Font = Enum.Font.Gotham
+        playersLabel.Parent = frame
+        
+        local fpsLabel = Instance.new("TextLabel")
+        fpsLabel.Name = "FPSLabel"
+        fpsLabel.Size = UDim2.new(1, 0, 0, 25)
+        fpsLabel.Position = UDim2.new(0, 0, 0, 120)
+        fpsLabel.BackgroundTransparency = 1
+        fpsLabel.Text = "⚡ FPS: 60"
+        fpsLabel.TextColor3 = Color3.new(1, 0.5, 0)
+        fpsLabel.TextScaled = true
+        fpsLabel.Font = Enum.Font.Gotham
+        fpsLabel.Parent = frame
+        
+        -- Update function with better error handling
+        local startTime = tick()
+        local frameCount = 0
+        local lastFPSUpdate = tick()
+        
+        serverInfoConnection = RunService.Heartbeat:Connect(function()
+            frameCount = frameCount + 1
             
-            -- Update server time
-            local elapsed = tick() - startTime
-            local hours = math.floor(elapsed / 3600)
-            local minutes = math.floor((elapsed % 3600) / 60)
-            local seconds = math.floor(elapsed % 60)
-            timeLabel.Text = string.format("🕒 Server Time: %02d:%02d:%02d", hours, minutes, seconds)
-            
-            -- Update player count
-            playersLabel.Text = "👥 Players: " .. #Players:GetPlayers()
-            
-            -- Update glove count
-            local gloveCount = 0
-            for _, info in pairs(gloveInfo) do
-                if info ~= "No Glove" then
-                    gloveCount = gloveCount + 1
-                end
+            if tick() - lastFPSUpdate >= 1 then
+                pcall(function()
+                    if serverInfoGui and serverInfoGui.Parent then
+                        -- Update ping
+                        local pingValue = math.floor(game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue())
+                        frame.PingLabel.Text = "📡 Ping: " .. pingValue .. "ms"
+                        
+                        -- Update server time
+                        local elapsed = tick() - startTime
+                        local hours = math.floor(elapsed / 3600)
+                        local minutes = math.floor((elapsed % 3600) / 60)
+                        local seconds = math.floor(elapsed % 60)
+                        frame.TimeLabel.Text = string.format("🕒 Time: %02d:%02d:%02d", hours, minutes, seconds)
+                        
+                        -- Update player count
+                        frame.PlayersLabel.Text = "👥 Players: " .. #Players:GetPlayers()
+                        
+                        -- Update FPS
+                        frame.FPSLabel.Text = "⚡ FPS: " .. frameCount
+                        frameCount = 0
+                        lastFPSUpdate = tick()
+                    end
+                end)
             end
-            gloveLabel.Text = "🥊 Gloves: " .. gloveCount
-            
-            task.wait(1)
-        end
+        end)
     end)
 end
 
--- Auto Dodge System
+local function removeServerInfo()
+    if serverInfoGui then
+        serverInfoGui:Destroy()
+        serverInfoGui = nil
+    end
+    if serverInfoConnection then
+        serverInfoConnection:Disconnect()
+        serverInfoConnection = nil
+    end
+end
+
+-- Simplified Auto Dodge System
 local lastDodgeTime = 0
 local function autoDodge()
     if not _G.autoDodge then return end
     
     local character = player.Character
-    if not character or not character:FindFirstChild("HumanoidRootPart") then return end
+    if not character or not character:FindFirstChild("HumanoidRootPart") or not character:FindFirstChild("Humanoid") then return end
     
     local currentTime = tick()
     if currentTime - lastDodgeTime < _G.dodgeCooldown then return end
     
-    -- Check for nearby players with tools
+    local humanoid = character.Humanoid
+    local rootPart = character.HumanoidRootPart
+    
+    -- Simple dodge: check for nearby players with tools
     for _, plr in pairs(Players:GetPlayers()) do
         if plr ~= player and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
-            local distance = getDistance(character.HumanoidRootPart, plr.Character.HumanoidRootPart)
+            local distance = getDistance(rootPart, plr.Character.HumanoidRootPart)
             
-            if distance <= _G.dodgeRange then
+            if distance <= _G.dodgeRange and distance > 5 then
                 local tool = plr.Character:FindFirstChildOfClass("Tool")
                 if tool then
-                    -- Dodge by jumping and moving
-                    local humanoid = character:FindFirstChild("Humanoid")
-                    if humanoid then
-                        humanoid.Jump = true
-                        
-                        -- Random dodge direction
-                        local dodgeDirection = Vector3.new(
-                            math.random(-1, 1),
-                            0,
-                            math.random(-1, 1)
-                        ).Unit * _G.dodgeDistance
-                        
-                        character.HumanoidRootPart.Velocity = character.HumanoidRootPart.Velocity + dodgeDirection
-                        lastDodgeTime = currentTime
-                        
-                        if _G.dodgeNotifications then
-                            Rayfield:Notify({
-                                Title = "🎪 Auto Dodge!",
-                                Content = "Dodged attack from " .. plr.Name,
-                                Duration = 1,
-                            })
-                        end
-                        break
+                    -- Simple dodge: jump and move away
+                    local dodgeDirection = (rootPart.Position - plr.Character.HumanoidRootPart.Position).Unit
+                    dodgeDirection = Vector3.new(dodgeDirection.X, 0, dodgeDirection.Z) -- Keep Y at 0
+                    
+                    humanoid.Jump = true
+                    rootPart.Velocity = rootPart.Velocity + (dodgeDirection * _G.dodgeDistance)
+                    
+                    lastDodgeTime = currentTime
+                    
+                    if _G.dodgeNotifications then
+                        Rayfield:Notify({
+                            Title = "🎪 Auto Dodge!",
+                            Content = "Dodged " .. plr.Name,
+                            Duration = 1,
+                        })
                     end
+                    break
                 end
             end
         end
@@ -1469,10 +1557,10 @@ RunService.Heartbeat:Connect(function()
         end
         
         -- New advanced features
-        if _G.aimbot then aimbot() end
-        if _G.antiKick then setupAntiKick() end
-        if _G.gloveDetector and loopCount % 60 == 0 then detectGloves() end
-        if _G.autoDodge then autoDodge() end
+        if _G.aimbot and loopCount % 2 == 0 then aimbot() end
+        if _G.antiKick and loopCount % 30 == 0 then setupAntiKick() end
+        if _G.gloveDetector and loopCount % 30 == 0 then detectGloves() end
+        if _G.autoDodge and loopCount % 3 == 0 then autoDodge() end
     end
 end)
 
