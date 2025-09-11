@@ -1133,34 +1133,64 @@ CombatTab:CreateSlider({
     end,
 })
 
--- Fixed Aimbot System
+-- Advanced Aimbot System with Target Switching
+local currentTarget = nil
+local targetLockTime = 0
 local function aimbot()
     if not _G.aimbot then return end
     
     local character = player.Character
     if not character or not character:FindFirstChild("HumanoidRootPart") then return end
     
-    local target = getClosestPlayer()
-    if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
-        local distance = getDistance(character.HumanoidRootPart, target.Character.HumanoidRootPart)
-        
-        if distance <= _G.aimbotRange then
-            pcall(function()
-                -- Auto aim camera to target
-                local camera = Workspace.CurrentCamera
-                local targetPosition = target.Character.HumanoidRootPart.Position + Vector3.new(0, 2, 0) -- Aim slightly higher
-                
-                -- Calculate look direction
-                local lookDirection = (targetPosition - camera.CFrame.Position).Unit
-                local newCFrame = CFrame.lookAt(camera.CFrame.Position, camera.CFrame.Position + lookDirection)
-                
-                if _G.smoothAim then
-                    camera.CFrame = camera.CFrame:Lerp(newCFrame, _G.aimSmoothness)
-                else
-                    camera.CFrame = newCFrame
-                end
-            end)
+    local camera = Workspace.CurrentCamera
+    if not camera then return end
+    
+    -- Get closest player
+    local closestPlayer = nil
+    local closestDistance = math.huge
+    
+    for _, plr in pairs(Players:GetPlayers()) do
+        if plr ~= player and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+            local distance = getDistance(character.HumanoidRootPart, plr.Character.HumanoidRootPart)
+            if distance <= _G.aimbotRange and distance < closestDistance then
+                closestDistance = distance
+                closestPlayer = plr
+            end
         end
+    end
+    
+    -- Switch target if current target is too far or new target is closer
+    if not currentTarget or not currentTarget.Character or 
+       not currentTarget.Character:FindFirstChild("HumanoidRootPart") or
+       getDistance(character.HumanoidRootPart, currentTarget.Character.HumanoidRootPart) > _G.aimbotRange or
+       (closestPlayer and closestDistance < getDistance(character.HumanoidRootPart, currentTarget.Character.HumanoidRootPart) - 5) then
+        currentTarget = closestPlayer
+        targetLockTime = tick()
+    end
+    
+    -- Aim at current target
+    if currentTarget and currentTarget.Character and currentTarget.Character:FindFirstChild("HumanoidRootPart") then
+        pcall(function()
+            local targetPart = currentTarget.Character.HumanoidRootPart
+            local targetPosition = targetPart.Position + Vector3.new(0, 1.5, 0) -- Aim at torso level
+            
+            -- Predict movement
+            if targetPart.Velocity.Magnitude > 5 then
+                local prediction = targetPart.Velocity * 0.1 -- Simple prediction
+                targetPosition = targetPosition + prediction
+            end
+            
+            -- Calculate camera direction
+            local direction = (targetPosition - camera.CFrame.Position).Unit
+            local newCFrame = CFrame.lookAt(camera.CFrame.Position, camera.CFrame.Position + direction)
+            
+            -- Apply smooth or instant aim
+            if _G.smoothAim then
+                camera.CFrame = camera.CFrame:Lerp(newCFrame, _G.aimSmoothness)
+            else
+                camera.CFrame = newCFrame
+            end
+        end)
     end
 end
 
@@ -1279,117 +1309,127 @@ local function removeGloveDetector()
     end
 end
 
--- Fixed Server Info Display
+-- Simple Working Server Info Display
 local serverInfoGui
-local serverInfoConnection
 local function createServerInfo()
-    if serverInfoGui then serverInfoGui:Destroy() end
-    if serverInfoConnection then serverInfoConnection:Disconnect() end
+    -- Remove existing GUI
+    if serverInfoGui then
+        serverInfoGui:Destroy()
+    end
     
-    pcall(function()
-        serverInfoGui = Instance.new("ScreenGui")
-        serverInfoGui.Name = "ServerInfo"
-        serverInfoGui.Parent = player.PlayerGui
-        
-        local frame = Instance.new("Frame")
-        frame.Size = UDim2.new(0, 250, 0, 150)
-        frame.Position = UDim2.new(0, 10, 0, 200)
-        frame.BackgroundColor3 = Color3.new(0, 0, 0)
-        frame.BackgroundTransparency = 0.3
-        frame.BorderSizePixel = 0
-        frame.Parent = serverInfoGui
-        
-        local corner = Instance.new("UICorner")
-        corner.CornerRadius = UDim.new(0, 8)
-        corner.Parent = frame
-        
-        local title = Instance.new("TextLabel")
-        title.Size = UDim2.new(1, 0, 0, 25)
-        title.Position = UDim2.new(0, 0, 0, 0)
-        title.BackgroundTransparency = 1
-        title.Text = "📊 Server Info"
-        title.TextColor3 = Color3.new(1, 1, 1)
-        title.TextScaled = true
-        title.Font = Enum.Font.GothamBold
-        title.Parent = frame
-        
-        local pingLabel = Instance.new("TextLabel")
-        pingLabel.Name = "PingLabel"
-        pingLabel.Size = UDim2.new(1, 0, 0, 25)
-        pingLabel.Position = UDim2.new(0, 0, 0, 30)
-        pingLabel.BackgroundTransparency = 1
-        pingLabel.Text = "📡 Ping: Loading..."
-        pingLabel.TextColor3 = Color3.new(0, 1, 0)
-        pingLabel.TextScaled = true
-        pingLabel.Font = Enum.Font.Gotham
-        pingLabel.Parent = frame
-        
-        local timeLabel = Instance.new("TextLabel")
-        timeLabel.Name = "TimeLabel"
-        timeLabel.Size = UDim2.new(1, 0, 0, 25)
-        timeLabel.Position = UDim2.new(0, 0, 0, 60)
-        timeLabel.BackgroundTransparency = 1
-        timeLabel.Text = "🕒 Server Time: 00:00:00"
-        timeLabel.TextColor3 = Color3.new(0, 1, 1)
-        timeLabel.TextScaled = true
-        timeLabel.Font = Enum.Font.Gotham
-        timeLabel.Parent = frame
-        
-        local playersLabel = Instance.new("TextLabel")
-        playersLabel.Name = "PlayersLabel"
-        playersLabel.Size = UDim2.new(1, 0, 0, 25)
-        playersLabel.Position = UDim2.new(0, 0, 0, 90)
-        playersLabel.BackgroundTransparency = 1
-        playersLabel.Text = "👥 Players: " .. #Players:GetPlayers()
-        playersLabel.TextColor3 = Color3.new(1, 1, 0)
-        playersLabel.TextScaled = true
-        playersLabel.Font = Enum.Font.Gotham
-        playersLabel.Parent = frame
-        
-        local fpsLabel = Instance.new("TextLabel")
-        fpsLabel.Name = "FPSLabel"
-        fpsLabel.Size = UDim2.new(1, 0, 0, 25)
-        fpsLabel.Position = UDim2.new(0, 0, 0, 120)
-        fpsLabel.BackgroundTransparency = 1
-        fpsLabel.Text = "⚡ FPS: 60"
-        fpsLabel.TextColor3 = Color3.new(1, 0.5, 0)
-        fpsLabel.TextScaled = true
-        fpsLabel.Font = Enum.Font.Gotham
-        fpsLabel.Parent = frame
-        
-        -- Update function with better error handling
-        local startTime = tick()
-        local frameCount = 0
-        local lastFPSUpdate = tick()
-        
-        serverInfoConnection = RunService.Heartbeat:Connect(function()
+    -- Create new GUI
+    serverInfoGui = Instance.new("ScreenGui")
+    serverInfoGui.Name = "GILONG_ServerInfo"
+    serverInfoGui.ResetOnSpawn = false
+    serverInfoGui.Parent = player.PlayerGui
+    
+    -- Main frame
+    local mainFrame = Instance.new("Frame")
+    mainFrame.Name = "MainFrame"
+    mainFrame.Size = UDim2.new(0, 220, 0, 140)
+    mainFrame.Position = UDim2.new(0, 10, 0, 200)
+    mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    mainFrame.BorderSizePixel = 2
+    mainFrame.BorderColor3 = Color3.fromRGB(0, 255, 0)
+    mainFrame.Parent = serverInfoGui
+    
+    -- Title
+    local titleLabel = Instance.new("TextLabel")
+    titleLabel.Name = "Title"
+    titleLabel.Size = UDim2.new(1, 0, 0, 25)
+    titleLabel.Position = UDim2.new(0, 0, 0, 0)
+    titleLabel.BackgroundTransparency = 1
+    titleLabel.Text = "📊 GILONG Server Info"
+    titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    titleLabel.TextSize = 14
+    titleLabel.Font = Enum.Font.GothamBold
+    titleLabel.Parent = mainFrame
+    
+    -- Info labels
+    local pingLabel = Instance.new("TextLabel")
+    pingLabel.Name = "Ping"
+    pingLabel.Size = UDim2.new(1, -10, 0, 20)
+    pingLabel.Position = UDim2.new(0, 5, 0, 30)
+    pingLabel.BackgroundTransparency = 1
+    pingLabel.Text = "📡 Ping: Loading..."
+    pingLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+    pingLabel.TextSize = 12
+    pingLabel.Font = Enum.Font.Gotham
+    pingLabel.TextXAlignment = Enum.TextXAlignment.Left
+    pingLabel.Parent = mainFrame
+    
+    local fpsLabel = Instance.new("TextLabel")
+    fpsLabel.Name = "FPS"
+    fpsLabel.Size = UDim2.new(1, -10, 0, 20)
+    fpsLabel.Position = UDim2.new(0, 5, 0, 55)
+    fpsLabel.BackgroundTransparency = 1
+    fpsLabel.Text = "⚡ FPS: 60"
+    fpsLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
+    fpsLabel.TextSize = 12
+    fpsLabel.Font = Enum.Font.Gotham
+    fpsLabel.TextXAlignment = Enum.TextXAlignment.Left
+    fpsLabel.Parent = mainFrame
+    
+    local playersLabel = Instance.new("TextLabel")
+    playersLabel.Name = "Players"
+    playersLabel.Size = UDim2.new(1, -10, 0, 20)
+    playersLabel.Position = UDim2.new(0, 5, 0, 80)
+    playersLabel.BackgroundTransparency = 1
+    playersLabel.Text = "👥 Players: " .. #Players:GetPlayers()
+    playersLabel.TextColor3 = Color3.fromRGB(0, 255, 255)
+    playersLabel.TextSize = 12
+    playersLabel.Font = Enum.Font.Gotham
+    playersLabel.TextXAlignment = Enum.TextXAlignment.Left
+    playersLabel.Parent = mainFrame
+    
+    local timeLabel = Instance.new("TextLabel")
+    timeLabel.Name = "Time"
+    timeLabel.Size = UDim2.new(1, -10, 0, 20)
+    timeLabel.Position = UDim2.new(0, 5, 0, 105)
+    timeLabel.BackgroundTransparency = 1
+    timeLabel.Text = "🕒 Time: 00:00:00"
+    timeLabel.TextColor3 = Color3.fromRGB(255, 0, 255)
+    timeLabel.TextSize = 12
+    timeLabel.Font = Enum.Font.Gotham
+    timeLabel.TextXAlignment = Enum.TextXAlignment.Left
+    timeLabel.Parent = mainFrame
+    
+    -- Update loop
+    local startTime = tick()
+    local frameCount = 0
+    local lastUpdate = tick()
+    
+    spawn(function()
+        while serverInfoGui and serverInfoGui.Parent do
             frameCount = frameCount + 1
             
-            if tick() - lastFPSUpdate >= 1 then
+            if tick() - lastUpdate >= 1 then
                 pcall(function()
-                    if serverInfoGui and serverInfoGui.Parent then
-                        -- Update ping
-                        local pingValue = math.floor(game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue())
-                        frame.PingLabel.Text = "📡 Ping: " .. pingValue .. "ms"
-                        
-                        -- Update server time
-                        local elapsed = tick() - startTime
-                        local hours = math.floor(elapsed / 3600)
-                        local minutes = math.floor((elapsed % 3600) / 60)
-                        local seconds = math.floor(elapsed % 60)
-                        frame.TimeLabel.Text = string.format("🕒 Time: %02d:%02d:%02d", hours, minutes, seconds)
-                        
-                        -- Update player count
-                        frame.PlayersLabel.Text = "👥 Players: " .. #Players:GetPlayers()
-                        
-                        -- Update FPS
-                        frame.FPSLabel.Text = "⚡ FPS: " .. frameCount
-                        frameCount = 0
-                        lastFPSUpdate = tick()
-                    end
+                    -- Update ping
+                    local stats = game:GetService("Stats")
+                    local ping = stats.Network.ServerStatsItem["Data Ping"]:GetValueString()
+                    mainFrame.Ping.Text = "📡 Ping: " .. ping
+                    
+                    -- Update FPS
+                    mainFrame.FPS.Text = "⚡ FPS: " .. frameCount
+                    
+                    -- Update players
+                    mainFrame.Players.Text = "👥 Players: " .. #Players:GetPlayers()
+                    
+                    -- Update time
+                    local elapsed = tick() - startTime
+                    local hours = math.floor(elapsed / 3600)
+                    local minutes = math.floor((elapsed % 3600) / 60)
+                    local seconds = math.floor(elapsed % 60)
+                    mainFrame.Time.Text = string.format("🕒 Time: %02d:%02d:%02d", hours, minutes, seconds)
+                    
+                    frameCount = 0
+                    lastUpdate = tick()
                 end)
             end
-        end)
+            
+            task.wait(0.1)
+        end
     end)
 end
 
@@ -1404,8 +1444,9 @@ local function removeServerInfo()
     end
 end
 
--- Simplified Auto Dodge System
+-- Reliable Auto Dodge System
 local lastDodgeTime = 0
+local dodgeCooldowns = {}
 local function autoDodge()
     if not _G.autoDodge then return end
     
@@ -1418,31 +1459,67 @@ local function autoDodge()
     local humanoid = character.Humanoid
     local rootPart = character.HumanoidRootPart
     
-    -- Simple dodge: check for nearby players with tools
+    -- Check for threats
     for _, plr in pairs(Players:GetPlayers()) do
-        if plr ~= player and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
-            local distance = getDistance(rootPart, plr.Character.HumanoidRootPart)
+        if plr ~= player and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") and plr.Character:FindFirstChild("Humanoid") then
+            local enemyRoot = plr.Character.HumanoidRootPart
+            local distance = getDistance(rootPart, enemyRoot)
             
-            if distance <= _G.dodgeRange and distance > 5 then
+            -- Check if player is in dodge range and has a tool
+            if distance <= _G.dodgeRange and distance > 3 then
                 local tool = plr.Character:FindFirstChildOfClass("Tool")
-                if tool then
-                    -- Simple dodge: jump and move away
-                    local dodgeDirection = (rootPart.Position - plr.Character.HumanoidRootPart.Position).Unit
-                    dodgeDirection = Vector3.new(dodgeDirection.X, 0, dodgeDirection.Z) -- Keep Y at 0
+                if tool and not dodgeCooldowns[plr.Name] then
+                    -- Check if enemy is moving towards us or looking at us
+                    local enemyVelocity = enemyRoot.Velocity
+                    local directionToUs = (rootPart.Position - enemyRoot.Position).Unit
+                    local enemyLookDirection = enemyRoot.CFrame.LookVector
                     
-                    humanoid.Jump = true
-                    rootPart.Velocity = rootPart.Velocity + (dodgeDirection * _G.dodgeDistance)
+                    -- Simple threat detection
+                    local isLookingAtUs = enemyLookDirection:Dot(directionToUs) > 0.3
+                    local isMovingTowardsUs = enemyVelocity.Magnitude > 5 and enemyVelocity.Unit:Dot(directionToUs) > 0.3
                     
-                    lastDodgeTime = currentTime
-                    
-                    if _G.dodgeNotifications then
-                        Rayfield:Notify({
-                            Title = "🎪 Auto Dodge!",
-                            Content = "Dodged " .. plr.Name,
-                            Duration = 1,
-                        })
+                    if isLookingAtUs or isMovingTowardsUs then
+                        -- Execute dodge
+                        local dodgeDirection = (rootPart.Position - enemyRoot.Position).Unit
+                        dodgeDirection = Vector3.new(dodgeDirection.X, 0, dodgeDirection.Z).Unit
+                        
+                        -- Add some randomness to dodge direction
+                        local randomAngle = math.rad(math.random(-45, 45))
+                        local cos, sin = math.cos(randomAngle), math.sin(randomAngle)
+                        dodgeDirection = Vector3.new(
+                            dodgeDirection.X * cos - dodgeDirection.Z * sin,
+                            0,
+                            dodgeDirection.X * sin + dodgeDirection.Z * cos
+                        )
+                        
+                        -- Apply dodge movement
+                        humanoid.Jump = true
+                        local bodyVelocity = Instance.new("BodyVelocity")
+                        bodyVelocity.MaxForce = Vector3.new(4000, 0, 4000)
+                        bodyVelocity.Velocity = dodgeDirection * _G.dodgeDistance
+                        bodyVelocity.Parent = rootPart
+                        
+                        -- Clean up body velocity
+                        game:GetService("Debris"):AddItem(bodyVelocity, 0.3)
+                        
+                        lastDodgeTime = currentTime
+                        dodgeCooldowns[plr.Name] = true
+                        
+                        -- Clear player cooldown
+                        spawn(function()
+                            task.wait(1.5)
+                            dodgeCooldowns[plr.Name] = nil
+                        end)
+                        
+                        if _G.dodgeNotifications then
+                            Rayfield:Notify({
+                                Title = "🎪 Auto Dodge!",
+                                Content = "Dodged " .. plr.Name .. "'s attack",
+                                Duration = 1,
+                            })
+                        end
+                        break
                     end
-                    break
                 end
             end
         end
